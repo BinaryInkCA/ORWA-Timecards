@@ -53,6 +53,7 @@ def get_location_codes():
         
         if cached_data:
             logger.info("Using cached location codes")
+            print(f"Retrieved {len(pd.read_json(StringIO(cached_data)))} locations from cache")
             return pd.read_json(StringIO(cached_data))
         
         conn_str = (
@@ -72,13 +73,14 @@ def get_location_codes():
         
         cached_json = df_locations[['LOCATION_CODE', 'LOCATION_NAME', 'brand']].to_json()
         if isinstance(cache, redis.Redis):
-            cache.set(cache_key, cached_json.encode('utf-8'), ex=604800)  # 7 days
+            cache.set(cache_key, cached_json.encode('utf-8'), ex=86400)  # 24 hours, matching reference
         else:
-            cache.set(cache_key, cached_json, expire=604800)
+            cache.set(cache_key, cached_json, expire=86400)
         
+        print(f"Retrieved {len(df_locations)} locations from SQL")
         return df_locations[['LOCATION_CODE', 'LOCATION_NAME', 'brand']]
     except Exception as e:
-        logger.error(f"Error fetching location codes: {e}")
+        print(f"Error fetching location codes: {e}")
         return pd.DataFrame(columns=['LOCATION_CODE', 'LOCATION_NAME', 'brand'])
 
 def get_employee_names():
@@ -110,9 +112,9 @@ def get_employee_names():
         
         cached_json = df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']].to_json()
         if isinstance(cache, redis.Redis):
-            cache.set(cache_key, cached_json.encode('utf-8'), ex=604800)  # 7 days
+            cache.set(cache_key, cached_json.encode('utf-8'), ex=86400)  # 24 hours, matching reference
         else:
-            cache.set(cache_key, cached_json, expire=604800)
+            cache.set(cache_key, cached_json, expire=86400)
         
         return df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']]
     except Exception as e:
@@ -150,6 +152,7 @@ def fetch_location_data(location_code, location_name, brand, labor_date):
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
+        logger.info(f"Raw API Data for {location_code}: {data}")
         
         body = data if isinstance(data, list) else data.get('body', [])
         if not body:
@@ -172,7 +175,7 @@ def fetch_location_data(location_code, location_name, brand, labor_date):
             return df
         return pd.DataFrame()
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching data for {location_code}: {e}")
+        logger.error(f"Error fetching data for {location_code}: {e} - Ignoring and continuing")
         return pd.DataFrame()
 
 def fetch_data(force_refresh=False):
@@ -193,7 +196,9 @@ def fetch_data(force_refresh=False):
         
         if cached_data and not force_refresh:
             logger.info("Using cached data")
-            return pd.read_json(StringIO(cached_data))
+            df = pd.read_json(StringIO(cached_data))
+            logger.info(f"Cached DataFrame shape: {df.shape}, columns: {df.columns}")
+            return df
     except Exception as e:
         logger.error(f"Cache read error: {e}")
     
@@ -265,15 +270,16 @@ def fetch_data(force_refresh=False):
         
         cached_json = df.to_json()
         if isinstance(cache, redis.Redis):
-            cache.set(cache_key, cached_json.encode('utf-8'), ex=900)  # 15 min
+            cache.set(cache_key, cached_json.encode('utf-8'), ex=900)  # 15 min, matching reference
         else:
             cache.set(cache_key, cached_json, expire=900)
         
+        logger.info(f"Raw combined DataFrame shape: {df.shape}, columns: {df.columns}")
         return df
     except Exception as e:
         logger.error(f"Error in fetch_data: {e}")
         return pd.DataFrame({
-            'error': ["Error fetching data"],
+            'error': [str(e)],
             'location': ['Unknown'],
             'location_code': ['Unknown'],
             'brand': ['Unknown'],
@@ -340,7 +346,7 @@ app.layout = dbc.Container(fluid=True, children=[
         ]),
         style={'boxShadow': '0 4px 8px rgba(0,0,0,0.1)', 'borderRadius': '10px', 'backgroundColor': 'white', 'margin': '20px auto', 'maxWidth': '80%'}
     ),
-    dcc.Interval(id='refresh-interval', interval=1000, n_intervals=0, disabled=True, max_intervals=1)
+    dcc.Interval(id='refresh-interval', interval=15*60*1000, n_intervals=0, disabled=True)  # 15 min, matching reference
 ])
 
 @app.callback(
@@ -364,6 +370,7 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals):
     ctx = callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
     if triggered_id == 'refresh-button' and n_clicks > 0:
+        df = fetch_data(force_refresh=True)
         return [], "Refresh in Progress", True, False, [], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())]
     if triggered_id == 'refresh-interval' and n_intervals > 0:
         df = fetch_data(force_refresh=True)
