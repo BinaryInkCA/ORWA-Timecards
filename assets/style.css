@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;700&display=swap');
+
+body {
+  background: radial-gradient(ellipse at 50% 50%, #e9f1ff 0%, #d6e6ff 40%, #e0f3e8 70%, #f2f9f5 100%);
+  background-size: 100% 100vh;
+  background-attachment: fixed;
+  font-family: 'Inter', sans-serif;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+  background-color: #007bff;
+  color: white;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  text-align: left;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover {
+  background-color: #e9ecef;
+  transition: background-color 0.2s ease;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
+  border: 1px solid #dee2e6;
+  padding: 8px;
+  font-family: 'Inter', sans-serif;
+  text-align: left;
+}
+
+.dropdown {
+  width: 75%; /* Reduced from 150% to 75% (25% wider than original 100%) */
+}
+
+.dropdown select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #ced4da;
+  font-size: 16px;
+  font-family: 'Inter', sans-serif;
+  background-color: #e9f1ff; /* Light muted blue */
+}
+
+.search-bar {
+  width: 75%; /* Reduced from 150% to 75% (25% wider than original 100%) */
+  margin-top: 10px;
+}
+
+.search-bar input {
+  width: 100%;
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #ced4da;
+  font-size: 16px;
+  font-family: 'Inter', sans-serif;
+}
