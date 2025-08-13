@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(0, "./.python_packages/lib/python3.10/site-packages")
 import dash
-from dash import dcc, html, Input, Output, callback_context, dcc
+from dash import dcc, html, Input, Output, callback_context, State
 import pandas as pd
 import requests
 import pyodbc
@@ -321,22 +321,26 @@ app.layout = dbc.Container(fluid=True, children=[
                 dbc.Col(width=2),
                 dbc.Col([
                     dbc.Button('Refresh Data', id='refresh-button', n_clicks=0, disabled=False, style={'backgroundColor': '#218838', 'borderColor': '#218838', 'fontFamily': 'Inter', 'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px', 'marginRight': '10px'}),
-                    dbc.Button('Export to Excel', id='export-button', n_clicks=0, style={'backgroundColor': '#007bff', 'borderColor': '#007bff', 'fontFamily': 'Inter', 'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px'})
+                    dbc.Button('Export to Excel', id='export-button', n_clicks=0, style={'backgroundColor': '#007bff', 'borderColor': '#007bff', 'fontFamily': 'Inter', 'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px'}),
+                    dbc.Button('Sort Table', id='sort-button', n_clicks=0, style={'backgroundColor': '#6c757d', 'borderColor': '#6c757d', 'fontFamily': 'Inter', 'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px'})
                 ], width=4, align='start', class_name='text-end')
             ], style={'marginBottom': '20px'}),
             dash_table.DataTable(
                 id='late-clockout-table',
                 columns=[
-                    {'name': 'Location Name', 'id': 'location'},
-                    {'name': 'Employee Number', 'id': 'employeeNumber'},
-                    {'name': 'First Name', 'id': 'first_name'},
-                    {'name': 'Last Name', 'id': 'last_name'},
-                    {'name': 'Labor Date', 'id': 'laborDate'},
-                    {'name': 'Clock Out Time', 'id': 'clockOut'}
+                    {'name': 'Location Name', 'id': 'location', 'sortable': True},
+                    {'name': 'Employee Number', 'id': 'employeeNumber', 'sortable': True},
+                    {'name': 'First Name', 'id': 'first_name', 'sortable': True},
+                    {'name': 'Last Name', 'id': 'last_name', 'sortable': True},
+                    {'name': 'Labor Date', 'id': 'laborDate', 'sortable': True},
+                    {'name': 'Clock Out Time', 'id': 'clockOut', 'sortable': True}
                 ],
                 data=[],
                 page_action='native',
-                page_size=10,
+                page_size=20,  # Changed from 10 to 20
+                sort_action='native',  # Enable native sorting
+                sort_mode='single',  # Allow single-column sorting
+                sort_by=[],  # Initialize empty sort state
                 style_table={'overflowX': 'auto'},
                 style_header={'backgroundColor': '#007bff', 'color': 'white', 'fontWeight': '500', 'borderBottom': '2px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left'},
                 style_cell={'border': '1px solid #dee2e6', 'padding': '8px', 'fontFamily': 'Inter', 'textAlign': 'left'},
@@ -359,27 +363,32 @@ app.layout = dbc.Container(fluid=True, children=[
         Output('refresh-interval', 'disabled'),
         Output('alerts-table', 'children'),
         Output('location-filter', 'options'),
-        Output('download-excel', 'data')
+        Output('download-excel', 'data'),
+        Output('late-clockout-table', 'sort_by')  # Add output for sorting state
     ],
     [
         Input('refresh-button', 'n_clicks'),
         Input('location-filter', 'value'),
         Input('search-input', 'value'),
         Input('refresh-interval', 'n_intervals'),
-        Input('export-button', 'n_clicks')
-    ]
+        Input('export-button', 'n_clicks'),
+        Input('sort-button', 'n_clicks')
+    ],
+    State('late-clockout-table', 'sort_by')  # State to maintain current sort
 )
-def update_dashboard(n_clicks, selected_location, search_value, n_intervals, export_n_clicks):
+def update_dashboard(n_clicks, selected_location, search_value, n_intervals, export_n_clicks, sort_n_clicks, current_sort):
     global df
     ctx = callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+    
     if triggered_id == 'refresh-button' and n_clicks > 0:
         df = fetch_data(force_refresh=True)
-        return [], "Refresh in Progress", True, False, [], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())], None
+        return [], "Refresh in Progress", True, False, [], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())], None, current_sort
     if triggered_id == 'refresh-interval' and n_intervals > 0:
         df = fetch_data(force_refresh=True)
     if 'error' in df.columns:
-        return [], "Error occurred", False, True, [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter'}))], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())], None
+        return [], "Error occurred", False, True, [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter'}))], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())], None, current_sort
+    
     filtered_df = df
     if selected_location:
         filtered_df = filtered_df[filtered_df['location'] == selected_location]
@@ -391,27 +400,30 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
             filtered_df['last_name'].str.lower().str.contains(search_lower, na=False)
         ]
     filtered_df = filtered_df.sort_values(['location', 'clockOut_dt'])
+    
     # Format clockOut and laborDate
     filtered_df['clockOut'] = pd.to_datetime(filtered_df['clockOut'], format='%H:%M %m/%d/%Y', errors='coerce').dt.strftime('%I:%M %p')
     filtered_df['laborDate'] = pd.to_datetime(filtered_df['laborDate'], errors='coerce').dt.strftime('%m/%d/%Y')
     table_data = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'laborDate', 'clockOut']].to_dict('records')
+    
     # Generate alerts using unfiltered df
     alerts = []
     location_counts = df.groupby('location').size()
     high_locations = location_counts[location_counts > 5].index
     for loc in high_locations:
         alerts.append(f"High number of late clockouts at {loc}!")
-    employee_counts = df.groupby(['employeeNumber', 'first_name', 'last_name']).size()
+    employee_counts = df.groupby(['employeeNumber', 'first_name', 'last_name', 'location']).size()
     high_employees = employee_counts[employee_counts > 3]
-    for idx in high_employees.index:
-        emp_num, first, last = idx
-        alerts.append(f"Check employee {first} {last} ({emp_num}) for repeated late clockouts.")
+    for (emp_num, first, last, loc) in high_employees.index:
+        alerts.append(f"{first} {last} at {loc} has repeated late clock outs")
+    
     if alerts:
         alert_rows = [html.Tr([html.Th('Alert Message', style={'backgroundColor': '#dc3545', 'color': 'white', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left'})])]
         for alert in alerts:
             alert_rows.append(html.Tr([html.Td(alert, style={'backgroundColor': '#fff3cd', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left'})]))
     else:
         alert_rows = [html.Tr([html.Td("No alerts", colSpan=1, style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter'})])]
+    
     refresh_text = f"Last refreshed: {df['refresh_time'].iloc[0] if 'refresh_time' in df.columns else 'Unknown'} | {len(filtered_df)} late clockOut events across {len(dates)} days"
     location_options = [{'label': loc, 'value': loc} for loc in sorted(filtered_df['location'].unique())]
 
@@ -424,8 +436,21 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             export_df.to_excel(writer, sheet_name='Late Clockouts', index=False)
         export_data = dcc.send_bytes(output.getvalue(), filename='late_clockouts.xlsx')
+        logger.info("Export to Excel triggered successfully")
 
-    return table_data, refresh_text, False, True, alert_rows, location_options, export_data
+    # Sorting logic
+    sort_by = current_sort
+    if triggered_id == 'sort-button' and sort_n_clicks > 0:
+        if current_sort:
+            # Toggle sort direction or clear if same column
+            if current_sort[0]['column_id'] == filtered_df.columns[0]:
+                sort_by = [{'column_id': current_sort[0]['column_id'], 'direction': 'asc' if current_sort[0]['direction'] == 'desc' else 'desc'}] if len(current_sort) == 1 else []
+            else:
+                sort_by = [{'column_id': filtered_df.columns[0], 'direction': 'asc'}]
+        else:
+            sort_by = [{'column_id': filtered_df.columns[0], 'direction': 'asc'}]
+
+    return table_data, refresh_text, False, True, alert_rows, location_options, export_data, sort_by
 
 if __name__ == '__main__':
     app.run_server(debug=False)
