@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(0, "./.python_packages/lib/python3.10/site-packages")
 import dash
-from dash import dcc, html, Input, Output, callback_context
+from dash import dcc, html, Input, Output, callback_context, State  # Added State to import
 import pandas as pd
 import requests
 import pyodbc
@@ -296,7 +296,7 @@ df = fetch_data()
 dates, start_date, end_date = get_date_range()
 
 app.layout = dbc.Container(fluid=True, children=[
-    html.H1('Timeclock Dashboard (Five Guys USA)', style={'textAlign': 'center', 'color': '#0056b3', 'fontSize': '30px', 'fontFamily': 'Poppins', 'fontWeight': '700', 'marginBottom': '10px', 'marginTop': '20px'}),  # Added margin-top for space
+    html.H1('Timeclock Dashboard (Five Guys USA)', style={'textAlign': 'center', 'color': '#0056b3', 'fontSize': '30px', 'fontFamily': 'Poppins', 'fontWeight': '700', 'marginBottom': '10px', 'marginTop': '20px'}),
     html.Div(f"Date Range: {start_date} to {end_date}", style={'textAlign': 'center', 'fontSize': '16px', 'color': '#6c757d', 'marginBottom': '10px', 'fontWeight': '400', 'fontFamily': 'Inter'}),
     html.Div(id='refresh-time', style={'textAlign': 'center', 'fontSize': '14px', 'color': '#6c757d', 'marginBottom': '20px', 'fontWeight': '400', 'fontFamily': 'Inter'}),
     dbc.Card(
@@ -337,8 +337,8 @@ app.layout = dbc.Container(fluid=True, children=[
                 data=[],
                 page_action='native',
                 page_size=20,
-                sort_action='custom',  # Custom sorting via callback
-                sort_by=[],  # Initialize empty sort state
+                sort_action='custom',
+                sort_by=[],
                 style_table={'overflowX': 'auto'},
                 style_header={
                     'backgroundColor': '#007bff',
@@ -347,7 +347,7 @@ app.layout = dbc.Container(fluid=True, children=[
                     'borderBottom': '2px solid #dee2e6',
                     'fontFamily': 'Inter',
                     'textAlign': 'left',
-                    'cursor': 'pointer'  # Indicate clickable headers
+                    'cursor': 'pointer'
                 },
                 style_cell={
                     'border': '1px solid #dee2e6',
@@ -356,7 +356,7 @@ app.layout = dbc.Container(fluid=True, children=[
                     'textAlign': 'left'
                 },
                 style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': '#f9f9f9'}],
-                style_header_conditional=[{'if': {'column_id': 'sorted-column'}, 'backgroundColor': '#ADD8E6'}]  # Light blue for sorted column
+                style_header_conditional=[{'if': {'column_id': 'sorted-column'}, 'backgroundColor': '#ADD8E6'}]
             ),
             html.H3('Alerts', style={'textAlign': 'center', 'color': '#2c3e50', 'marginBottom': '20px', 'marginTop': '30px', 'fontFamily': 'Poppins', 'fontWeight': '600', 'fontSize': '24px'}),
             html.Table(id='alerts-table', children=[], style={'width': '100%', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'overflow': 'hidden', 'marginBottom': '0'}),
@@ -364,7 +364,7 @@ app.layout = dbc.Container(fluid=True, children=[
         ]),
         style={'boxShadow': '0 4px 8px rgba(0,0,0,0.1)', 'borderRadius': '10px', 'backgroundColor': 'white', 'margin': '20px auto', 'maxWidth': '80%'}
     ),
-    dcc.Interval(id='refresh-interval', interval=15*60*1000, n_intervals=0, disabled=True)  # 15 min, matching reference
+    dcc.Interval(id='refresh-interval', interval=15*60*1000, n_intervals=0, disabled=True)
 ])
 
 @app.callback(
