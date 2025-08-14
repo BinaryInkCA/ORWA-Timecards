@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(0, "./.python_packages/lib/python3.10/site-packages")
 import dash
-from dash import dcc, html, Input, Output, callback_context, State
+from dash import dcc, html, Input, Output, callback_context
 import pandas as pd
 import requests
 import pyodbc
@@ -18,7 +18,7 @@ import logging
 import io
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicBasicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize app
@@ -295,7 +295,18 @@ def fetch_data(force_refresh=False):
 df = fetch_data()
 dates, start_date, end_date = get_date_range()
 
+# Compute initial filtered_df and table_data
+filtered_df = df.copy()
+filtered_df['clockOut'] = pd.to_datetime(filtered_df['clockOut'], format='%H:%M %m/%d/%Y', errors='coerce').dt.strftime('%I:%M %p')
+filtered_df['laborDate'] = pd.to_datetime(filtered_df['laborDate'], errors='coerce').dt.strftime('%m/%d/%Y')
+initial_table_data = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'laborDate', 'clockOut']].to_dict('records')
+
 app.layout = dbc.Container(fluid=True, children=[
+    html.Style("""
+        .column-header--sort {
+            display: none !important;
+        }
+    """),  # Hide sort icons
     html.H1('Timeclock Dashboard (Five Guys USA)', style={'textAlign': 'center', 'color': '#0056b3', 'fontSize': '30px', 'fontFamily': 'Poppins', 'fontWeight': '700', 'marginBottom': '10px', 'marginTop': '20px'}),
     html.Div(f"Date Range: {start_date} to {end_date}", style={'textAlign': 'center', 'fontSize': '16px', 'color': '#6c757d', 'marginBottom': '10px', 'fontWeight': '400', 'fontFamily': 'Inter'}),
     html.Div(id='refresh-time', style={'textAlign': 'center', 'fontSize': '14px', 'color': '#6c757d', 'marginBottom': '20px', 'fontWeight': '400', 'fontFamily': 'Inter'}),
@@ -319,11 +330,10 @@ app.layout = dbc.Container(fluid=True, children=[
                     )
                 ], width=6),
                 dbc.Col(width=2),
-                dbc.Col([
-                    dbc.Button('Refresh Data', id='refresh-button', n_clicks=0, disabled=False, style={'backgroundColor': '#218838', 'borderColor': '#218838', 'fontFamily': 'Inter', 'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px', 'marginRight': '10px'}),
-                    dbc.Button('Export to Excel', id='export-button', n_clicks=0, style={'backgroundColor': '#007bff', 'borderColor': '#007bff', 'fontFamily': 'Inter', 'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px'})
-                ], width=4, align='start', class_name='text-end')
-            ], style={'marginBottom': '20px'}),
+                dbc.Button('Refresh Data', id='refresh-button', n_clicks=0, disabled=False, style={'backgroundColor': '#218838', 'borderColor': '#218838', 'fontFamily': 'Inter', 'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px', 'marginRight': '10px'}),
+                dbc.Button('Export to Excel', id='export-button', n_clicks=0, style={'backgroundColor': '#007bff', 'borderColor': '#007bff', 'fontFamily': 'Inter', 'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px'})
+            ], width=4, align='start', class_name='text-end')
+        ], style={'marginBottom': '20px'}),
             dash_table.DataTable(
                 id='late-clockout-table',
                 columns=[
@@ -334,11 +344,12 @@ app.layout = dbc.Container(fluid=True, children=[
                     {'name': 'Labor Date', 'id': 'laborDate'},
                     {'name': 'Clock Out Time', 'id': 'clockOut'}
                 ],
-                data=[],
+                data=initial_table_data,  # Set initial data
                 page_action='native',
                 page_size=20,
-                sort_action='custom',
-                sort_by=[],
+                sort_action='native',  # Enable native sorting
+                sort_mode='single',  # Single-column sorting
+                sort_by=[],  # Initial sort state
                 style_table={'overflowX': 'auto'},
                 style_header={
                     'backgroundColor': '#007bff',
@@ -356,7 +367,7 @@ app.layout = dbc.Container(fluid=True, children=[
                     'textAlign': 'left'
                 },
                 style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': '#f9f9f9'}],
-                style_header_conditional=[{'if': {'column_id': 'sorted-column'}, 'backgroundColor': '#ADD8E6'}]
+                style_header_conditional=[],  # Initial empty
             ),
             html.H3('Alerts', style={'textAlign': 'center', 'color': '#2c3e50', 'marginBottom': '20px', 'marginTop': '30px', 'fontFamily': 'Poppins', 'fontWeight': '600', 'fontSize': '24px'}),
             html.Table(id='alerts-table', children=[], style={'width': '100%', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'overflow': 'hidden', 'marginBottom': '0'}),
@@ -376,31 +387,29 @@ app.layout = dbc.Container(fluid=True, children=[
         Output('alerts-table', 'children'),
         Output('location-filter', 'options'),
         Output('download-excel', 'data'),
-        Output('late-clockout-table', 'style_header_conditional'),
-        Output('late-clockout-table', 'sort_by')
+        Output('late-clockout-table', 'style_header_conditional')
     ],
     [
         Input('refresh-button', 'n_clicks'),
         Input('location-filter', 'value'),
         Input('search-input', 'value'),
         Input('refresh-interval', 'n_intervals'),
-        Input('export-button', 'n_clicks'),
-        Input({'type': 'late-clockout-table-header', 'index': dash.ALL}, 'n_clicks')  # Trigger on header click
+        Input('export-button', 'n_clicks')
     ],
-    State('late-clockout-table', 'sort_by')
+    State('late-clockout-table', 'sort_by')  # For highlight
 )
-def update_dashboard(n_clicks, selected_location, search_value, n_intervals, export_n_clicks, header_clicks, current_sort):
+def update_dashboard(n_clicks, selected_location, search_value, n_intervals, export_n_clicks, current_sort):
     global df
     ctx = callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
     
     if triggered_id == 'refresh-button' and n_clicks > 0:
         df = fetch_data(force_refresh=True)
-        return [], "Refresh in Progress", True, False, [], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())], None, [], current_sort
+        return [], "Refresh in Progress", True, False, [], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())], None, []
     if triggered_id == 'refresh-interval' and n_intervals > 0:
         df = fetch_data(force_refresh=True)
     if 'error' in df.columns:
-        return [], "Error occurred", False, True, [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter'}))], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())], None, [], current_sort
+        return [], "Error occurred", False, True, [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter'}))], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())], None, []
     
     filtered_df = df
     if selected_location:
@@ -451,31 +460,12 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         export_data = dcc.send_bytes(output.getvalue(), filename='late_clockouts.xlsx')
         logger.info("Export to Excel triggered successfully")
 
-    # Custom sorting logic based on header click
-    sort_by = current_sort
-    if triggered_id.startswith('{') and 'late-clockout-table-header' in triggered_id:  # Check for header click
-        column_id = ctx.triggered[0]['value']['id'] if ctx.triggered else None
-        if column_id and any(col['id'] == column_id for col in filtered_df.columns):
-            if sort_by and sort_by[0]['column_id'] == column_id:
-                # Toggle sort direction
-                new_direction = 'asc' if sort_by[0]['direction'] == 'desc' else 'desc'
-                sort_by = [{'column_id': column_id, 'direction': new_direction}]
-            else:
-                sort_by = [{'column_id': column_id, 'direction': 'asc'}]
-        else:
-            sort_by = []
-
-    # Apply sorting to table data
-    if sort_by:
-        sorted_data = filtered_df.sort_values(by=sort_by[0]['column_id'], ascending=sort_by[0]['direction'] == 'asc')
-        table_data = sorted_data[['location', 'employeeNumber', 'first_name', 'last_name', 'laborDate', 'clockOut']].to_dict('records')
-
     # Update style_header_conditional for sorted column
     style_header_conditional = []
-    if sort_by:
-        style_header_conditional = [{'if': {'column_id': sort_by[0]['column_id']}, 'backgroundColor': '#ADD8E6'}]
+    if current_sort:
+        style_header_conditional = [{'if': {'column_id': current_sort[0]['column_id']}, 'backgroundColor': '#ADD8E6'}]
 
-    return table_data, refresh_text, False, True, alert_rows, location_options, export_data, style_header_conditional, sort_by
+    return table_data, refresh_text, False, True, alert_rows, location_options, export_data, style_header_conditional
 
 if __name__ == '__main__':
     app.run_server(debug=False)
