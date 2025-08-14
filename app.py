@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(0, "./.python_packages/lib/python3.10/site-packages")
 import dash
-from dash import dcc, html, Input, Output, callback_context, State  # Added State to import
+from dash import dcc, html, Input, Output, callback_context, State
 import pandas as pd
 import requests
 import pyodbc
@@ -327,12 +327,12 @@ app.layout = dbc.Container(fluid=True, children=[
             dash_table.DataTable(
                 id='late-clockout-table',
                 columns=[
-                    {'name': 'Location Name', 'id': 'location', 'presentation': 'markdown'},
-                    {'name': 'Employee Number', 'id': 'employeeNumber', 'presentation': 'markdown'},
-                    {'name': 'First Name', 'id': 'first_name', 'presentation': 'markdown'},
-                    {'name': 'Last Name', 'id': 'last_name', 'presentation': 'markdown'},
-                    {'name': 'Labor Date', 'id': 'laborDate', 'presentation': 'markdown'},
-                    {'name': 'Clock Out Time', 'id': 'clockOut', 'presentation': 'markdown'}
+                    {'name': 'Location Name', 'id': 'location'},
+                    {'name': 'Employee Number', 'id': 'employeeNumber'},
+                    {'name': 'First Name', 'id': 'first_name'},
+                    {'name': 'Last Name', 'id': 'last_name'},
+                    {'name': 'Labor Date', 'id': 'laborDate'},
+                    {'name': 'Clock Out Time', 'id': 'clockOut'}
                 ],
                 data=[],
                 page_action='native',
@@ -385,11 +385,11 @@ app.layout = dbc.Container(fluid=True, children=[
         Input('search-input', 'value'),
         Input('refresh-interval', 'n_intervals'),
         Input('export-button', 'n_clicks'),
-        Input('late-clockout-table', 'columns')
+        Input({'type': 'late-clockout-table-header', 'index': dash.ALL}, 'n_clicks')  # Trigger on header click
     ],
     State('late-clockout-table', 'sort_by')
 )
-def update_dashboard(n_clicks, selected_location, search_value, n_intervals, export_n_clicks, columns, current_sort):
+def update_dashboard(n_clicks, selected_location, search_value, n_intervals, export_n_clicks, header_clicks, current_sort):
     global df
     ctx = callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
@@ -453,9 +453,9 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
 
     # Custom sorting logic based on header click
     sort_by = current_sort
-    if triggered_id == 'late-clockout-table' and columns:
-        column_id = ctx.triggered[0]['value']['id'] if ctx.triggered and 'columns' in ctx.inputs else None
-        if column_id and any(col['id'] == column_id for col in columns):
+    if triggered_id.startswith('{') and 'late-clockout-table-header' in triggered_id:  # Check for header click
+        column_id = ctx.triggered[0]['value']['id'] if ctx.triggered else None
+        if column_id and any(col['id'] == column_id for col in filtered_df.columns):
             if sort_by and sort_by[0]['column_id'] == column_id:
                 # Toggle sort direction
                 new_direction = 'asc' if sort_by[0]['direction'] == 'desc' else 'desc'
