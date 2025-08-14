@@ -293,15 +293,17 @@ app.layout = dbc.Container(fluid=True, children=[
             html.H3('Late ClockOut Employees', style={'textAlign': 'center', 'color': '#2c3e50', 'marginBottom': '20px', 'fontFamily': 'Poppins', 'fontWeight': '600', 'fontSize': '24px'}),
             dbc.Row(
                 [
+                    dbc.Col(width=6),
                     dbc.Col(
                         [
                             dbc.Button('Refresh Data', id='refresh-button', n_clicks=0, disabled=False, style={'backgroundColor': '#218838', 'borderColor': '#218838', 'fontFamily': 'Inter', 'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px', 'marginRight': '10px'}),
                             dbc.Button('Export to Excel', id='export-button', n_clicks=0, style={'backgroundColor': '#007bff', 'borderColor': '#007bff', 'fontFamily': 'Inter', 'padding': '10px 20px', 'fontSize': '16px', 'borderRadius': '5px'})
                         ],
                         width="auto",
+                        class_name='text-end'
                     )
                 ],
-                justify="start",
+                justify="end",
                 style={'marginBottom': '10px'},
             ),
             dbc.Row(
@@ -314,7 +316,7 @@ app.layout = dbc.Container(fluid=True, children=[
                             placeholder="Select Location",
                             className='dropdown'
                         ),
-                        width=12,
+                        width=6,
                     )
                 ],
                 style={'marginBottom': '10px'},
@@ -346,7 +348,7 @@ app.layout = dbc.Container(fluid=True, children=[
                             className='dropdown'
                         ),
                         width=6,
-                        class_name='text-end'
+                        class_name='text-start'
                     )
                 ],
                 style={'marginBottom': '20px'},
@@ -437,13 +439,13 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
     # Sort the DataFrame
     if sort_col:
         if sort_col == 'clockOut':
-            filtered_df = filtered_df.sort_values('clockOut_dt', ascending=True)
+            filtered_df = filtered_df.sort_values('clockOut_dt', ascending=False)
         elif sort_col == 'laborDate':
-            filtered_df = filtered_df.sort_values('laborDate', key=lambda x: pd.to_datetime(x, errors='coerce'), ascending=True)
+            filtered_df = filtered_df.sort_values('laborDate', key=lambda x: pd.to_datetime(x, errors='coerce'), ascending=False)
         else:
-            filtered_df = filtered_df.sort_values(sort_col, ascending=True)
+            filtered_df = filtered_df.sort_values(sort_col, ascending=False)
     else:
-        filtered_df = filtered_df.sort_values(['location', 'clockOut_dt'], ascending=True)
+        filtered_df = filtered_df.sort_values(['location', 'clockOut_dt'], ascending=False)
    
     # Format clockOut and laborDate
     filtered_df['clockOut'] = filtered_df['clockOut_dt'].dt.strftime('%I:%M %p')
