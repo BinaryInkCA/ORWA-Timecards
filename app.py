@@ -332,12 +332,6 @@ app.layout = dbc.Container(fluid=True, children=[
                         ),
                         width=6,
                     ),
-                ],
-                style={'marginBottom': '10px'},
-            ),
-            dbc.Row(
-                [
-                    dbc.Col(width=6),
                     dbc.Col(
                         dcc.Dropdown(
                             id='sort-dropdown',
@@ -354,7 +348,7 @@ app.layout = dbc.Container(fluid=True, children=[
                             className='dropdown'
                         ),
                         width=6,
-                        style={'textAlign': 'right'}
+                        class_name='text-start'
                     )
                 ],
                 style={'marginBottom': '20px'},
