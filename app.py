@@ -224,7 +224,7 @@ def fetch_data(force_refresh=False):
         
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = [
-                executor.submit(fetch_location_data, str(row['LOCATION_CODE']), row['LOCATION_NAME', 'brand'], d)
+                executor.submit(fetch_location_data, str(row['LOCATION_CODE']), row['LOCATION_NAME'], row['brand'], d)
                 for _, row in df_locations.iterrows() for d in dates
             ]
             all_data = [future.result() for future in as_completed(futures) if not future.result().empty]
@@ -349,6 +349,7 @@ app.layout = dbc.Container(fluid=True, children=[
                         width=4,
                         className='mb-3'
                     ),
+                    dbc.Col(width=4)
                 ],
                 style={'marginBottom': '20px'},
             ),
