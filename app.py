@@ -311,23 +311,27 @@ app.layout = dbc.Container(fluid=True, children=[
             dbc.Row(
                 [
                     dbc.Col(
-                        dcc.Dropdown(
-                            id='location-filter',
-                            options=[{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())],
-                            value=None,
-                            placeholder="Select Location",
-                            className='filter-box'
-                        ),
+                        html.Div([
+                            dcc.Dropdown(
+                                id='location-filter',
+                                options=[{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())],
+                                value=None,
+                                placeholder="Select Location",
+                                className='filter-box'
+                            )
+                        ], className='dropdown'),
                         width=4,
                         className='mb-3'
                     ),
                     dbc.Col(
-                        dcc.Input(
-                            id='search-input',
-                            type='text',
-                            placeholder='Enter employee name or number',
-                            className='filter-box'
-                        ),
+                        html.Div([
+                            dcc.Input(
+                                id='search-input',
+                                type='text',
+                                placeholder='Enter employee name or number',
+                                className='filter-box'
+                            )
+                        ], className='search-bar'),
                         width=4,
                         className='mb-3'
                     ),
@@ -458,4 +462,21 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
     else:
         alert_rows = [html.Tr([html.Td("No alerts", colSpan=1, style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'})])]
     
-    refresh_text = f"Last refreshed: {df['refresh_time'].iloc[0] if 'refresh_time' in df.columns else 'Unknown'} | {len(filtered_df)} late clockOut events
+    refresh_text = f"Last refreshed: {df['refresh_time'].iloc[0] if 'refresh_time' in df.columns else 'Unknown'} | {len(filtered_df)} late clockOut events across {len(dates)} days"
+    location_options = [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())]
+    
+    # Export to Excel logic
+    export_data = None
+    if triggered_id == 'export-button' and export_n_clicks > 0:
+        export_df = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'laborDate', 'clockOut']].copy()
+        export_df['clockOut'] = pd.to_datetime(export_df['clockOut'], format='%I:%M %p', errors='coerce').dt.strftime('%H:%M')
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            export_df.to_excel(writer, sheet_name='Late Clockouts', index=False)
+        export_data = dcc.send_bytes(output.getvalue(), filename='late_clockouts.xlsx')
+        logger.info("Export to Excel triggered successfully")
+    
+    return table_data, refresh_text, False, True, alert_rows, location_options, export_data
+
+if __name__ == '__main__':
+    app.run_server(debug=False)
