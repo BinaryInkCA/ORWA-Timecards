@@ -34,6 +34,10 @@ body {
   text-align: left;
   font-size: 14px;
 }
+/* Hide sort icons */
+.dash-spreadsheet-inner th .column-header--sort {
+  display: none !important;
+}
 /* Filter box styling (for search input) */
 .filter-box {
   min-width: 300px;
