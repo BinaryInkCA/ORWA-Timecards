@@ -1,10 +1,15 @@
+/* Import fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;700&display=swap');
+
+/* Body styling */
 body {
   background: radial-gradient(ellipse at 50% 50%, #e9f1ff 0%, #d6e6ff 40%, #e0f3e8 70%, #f2f9f5 100%);
   background-size: 100% 100vh;
   background-attachment: fixed;
   font-family: 'Inter', sans-serif;
 }
+
+/* Table header styling */
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
   background-color: #007bff;
   color: white;
@@ -16,6 +21,8 @@ body {
   cursor: pointer;
   user-select: none;
 }
+
+/* Table row and cell styling */
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:nth-child(even) {
   background-color: #f9f9f9;
 }
@@ -30,39 +37,32 @@ body {
   text-align: left;
   font-size: 14px;
 }
-.dropdown {
-  min-width: 300px;
-}
-.dropdown select {
-  width: 100%;
+
+/* Filter box styling (location and search) */
+.filter-box {
+  min-width: 300px; /* Adjustable width for long names */
+  height: 36px; /* Fixed height to match both dropdown and input */
   padding: 8px;
   border-radius: 5px;
   border: 1px solid #ced4da;
   font-size: 14px;
   font-family: 'Inter', sans-serif;
   background-color: #e9f1ff;
+  transition: border-color 0.2s ease;
+  line-height: 1.5;
   pointer-events: auto;
   z-index: 1;
-  height: 36px;
-  line-height: 1.5;
 }
-.search-bar {
-  min-width: 300px;
+
+/* Specific adjustments for dropdown and input */
+.dropdown .filter-box {
+  appearance: none; /* Ensure single arrow in Dash dropdowns */
+}
+.search-bar .filter-box {
   margin-top: 5px;
 }
-.search-bar input {
-  width: 100%;
-  padding: 8px;
-  border-radius: 5px;
-  border: 1px solid #ced4da;
-  font-size: 14px;
-  font-family: 'Inter', sans-serif;
-  background-color: #e9f1ff;
-  pointer-events: auto;
-  z-index: 1;
-  height: 36px;
-  line-height: 1.5;
-}
+
+/* Button styling */
 .btn-success {
   background-color: #218838;
   border-color: #218838;
@@ -85,3 +85,7 @@ body {
   line-height: 1.5;
   white-space: nowrap;
 }
+
+/* Notes for future adjustments */
+/* To resize filter boxes, adjust 'height' and 'min-width' in .filter-box class */
+/* To reposition, modify margin or use Bootstrap grid classes in app.py layout */
