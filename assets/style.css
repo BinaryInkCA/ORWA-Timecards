@@ -18,7 +18,8 @@ body {
   border-bottom: 2px solid #dee2e6;
   cursor: pointer;
   user-select: none;
-  position: relative; /* For potential overlay if needed */
+  position: relative; /* Anchor for absolute sort overlay */
+  overflow: hidden; /* Prevent any overflow from hidden elements */
 }
 /* Table row and cell styling */
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:nth-child(even) {
@@ -35,12 +36,25 @@ body {
   text-align: left;
   font-size: 14px;
 }
-/* Hide sort icons but keep in DOM for clickability */
+/* Make sort area transparent and cover entire header */
 .dash-spreadsheet-inner th .column-header--sort {
-  visibility: hidden !important;
-  width: 0 !important;
-  padding: 0 !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 0 !important; /* Invisible but clickable */
+  background: transparent !important;
+  pointer-events: auto !important;
+  z-index: 1 !important;
   margin: 0 !important;
+  padding: 0 !important;
+}
+/* Ensure header text is on top and visible */
+.dash-spreadsheet-inner th .column-header-name {
+  position: relative !important;
+  z-index: 2 !important;
+  padding: 0 !important; /* Adjust if text needs more space */
 }
 /* Filter box styling (for search input) */
 .filter-box {
