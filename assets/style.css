@@ -1,6 +1,5 @@
 /* Import fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;700&display=swap');
-
 /* Body styling */
 body {
   background: radial-gradient(ellipse at 50% 50%, #e9f1ff 0%, #d6e6ff 40%, #e0f3e8 70%, #f2f9f5 100%);
@@ -8,7 +7,6 @@ body {
   background-attachment: fixed;
   font-family: 'Inter', sans-serif;
 }
-
 /* Table header styling */
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
   background-color: #007bff;
@@ -21,7 +19,6 @@ body {
   cursor: pointer;
   user-select: none;
 }
-
 /* Table row and cell styling */
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:nth-child(even) {
   background-color: #f9f9f9;
@@ -37,8 +34,7 @@ body {
   text-align: left;
   font-size: 14px;
 }
-
-/* Filter box styling (location and search) */
+/* Filter box styling (for search input) */
 .filter-box {
   min-width: 300px;
   height: 36px;
@@ -53,15 +49,40 @@ body {
   pointer-events: auto;
   z-index: 1;
 }
-
-/* Specific adjustments for dropdown and input */
-.dropdown .filter-box {
-  appearance: none; /* Ensure single arrow */
+/* Dropdown styling (targeting react-select components) */
+.dropdown .Select-control {
+  min-width: 300px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 5px;
+  border: 1px solid #ced4da;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  background-color: #e9f1ff;
+  transition: border-color 0.2s ease;
+  line-height: 36px;
 }
-.search-bar .filter-box {
-  margin-top: 5px;
+.dropdown .Select-placeholder,
+.dropdown .Select-value-label {
+  line-height: 36px;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  color: #6c757d;
 }
-
+.dropdown .Select-input {
+  height: 36px;
+  line-height: 36px;
+}
+.dropdown .Select-input > input {
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  padding: 0 !important;
+  line-height: 36px;
+  height: 36px;
+}
+.dropdown .Select-arrow-zone {
+  line-height: 36px;
+}
 /* Button styling */
 .btn-success {
   background-color: #218838;
@@ -85,7 +106,6 @@ body {
   line-height: 1.5;
   white-space: nowrap;
 }
-
 /* Notes for future adjustments */
-/* To resize filter boxes, adjust 'height' and 'min-width' in .filter-box class */
+/* To resize filter boxes, adjust 'height' and 'min-width' in relevant classes */
 /* To reposition, modify margin or use Bootstrap grid classes in app.py layout */
