@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(0, "./.python_packages/lib/python3.10/site-packages")
 import dash
-from dash import dcc, html, Input, Output, callback_context, State
+from dash import dcc, html, Input, Output, callback_context, State, clientside_callback
 import pandas as pd
 import requests
 import pyodbc
@@ -397,12 +397,33 @@ app.layout = dbc.Container(fluid=True, children=[
             ),
             html.H3('Alerts', style={'textAlign': 'center', 'color': '#2c3e50', 'marginBottom': '20px', 'marginTop': '30px', 'fontFamily': 'Poppins', 'fontWeight': '600', 'fontSize': '24px'}),
             html.Table(id='alerts-table', children=initial_alert_rows, style={'width': '100%', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'overflow': 'hidden'}),
-            dcc.Download(id='download-excel')
+            dcc.Download(id='download-excel'),
+            html.Div(id='dummy', style={'display': 'none'})
         ]),
         style={'boxShadow': '0 4px 8px rgba(0,0,0,0.1)', 'borderRadius': '10px', 'backgroundColor': 'white', 'margin': '20px auto', 'maxWidth': '80%'}
     ),
     dcc.Interval(id='refresh-interval', interval=15*60*1000, n_intervals=0, disabled=True)
 ])
+
+# Clientside callback to make entire header clickable for sorting
+clientside_callback(
+    """
+    function(id) {
+        const headers = document.querySelectorAll('.dash-spreadsheet-inner th.dash-header');
+        headers.forEach(header => {
+            header.addEventListener('click', function(e) {
+                const sortIcon = header.querySelector('.column-header--sort');
+                if (sortIcon) {
+                    sortIcon.click();
+                }
+            });
+        });
+        return 'done';
+    }
+    """,
+    Output('dummy', 'children'),
+    Input('late-clockout-table', 'id')
+)
 @app.callback(
     [
         Output('late-clockout-table', 'data'),
