@@ -11,7 +11,7 @@ from diskcache import Cache
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import StringIO
 from dash.exceptions import PreventUpdate
-import dash_table
+from dash import dash_table
 import redis
 import os
 import logging
@@ -188,7 +188,7 @@ def fetch_data(force_refresh=False):
         
         if cached_data and not force_refresh:
             logger.info("Using cached data")
-            df = pd.read_json(StringIO(cached_data))
+            df = pd.read_json(StringIO(cached_data), convert_dates=['clockOut_dt', 'laborDate'])
             logger.info(f"Cached DataFrame shape: {df.shape}, columns: {df.columns}")
             return df
     except Exception as e:
