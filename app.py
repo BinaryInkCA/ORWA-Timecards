@@ -324,7 +324,9 @@ app.layout = dbc.Container(fluid=True, children=[
                                 'backgroundColor': '#e9f1ff',
                                 'width': '100%',
                                 'minWidth': '300px',
-                                'padding': '8px'
+                                'padding': '8px',
+                                'height': '36px',
+                                'lineHeight': '1.5'
                             }
                         ),
                         width=4,
@@ -343,7 +345,9 @@ app.layout = dbc.Container(fluid=True, children=[
                                 'border': '1px solid #ced4da',
                                 'fontFamily': 'Inter',
                                 'backgroundColor': '#e9f1ff',
-                                'minWidth': '300px'
+                                'minWidth': '300px',
+                                'height': '36px',
+                                'lineHeight': '1.5'
                             }
                         ),
                         width=4,
