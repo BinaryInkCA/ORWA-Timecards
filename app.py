@@ -16,22 +16,18 @@ import redis
 import os
 import logging
 import io
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 # Initialize app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, '/assets/style.css'])
 server = app.server
-
 # Cache setup: Azure Redis if REDIS_URL set, else local diskcache
 REDIS_URL = os.getenv('REDIS_URL')
 if REDIS_URL:
     cache = redis.Redis.from_url(REDIS_URL)
 else:
-    cache = Cache("cache")  # Local fallback
-
+    cache = Cache("cache") # Local fallback
 # Environment variables for Azure
 API_TOKEN = os.getenv('API_TOKEN', "5b67e106-173f-4281-a83f-87b2bdc3b1f1")
 API_PASSWORD = os.getenv('API_PASSWORD', "Welcome1")
@@ -41,7 +37,6 @@ SQL_SERVER = os.getenv('SQL_SERVER', "SQL-03")
 SQL_DATABASE = os.getenv('SQL_DATABASE', "TECHSYS")
 SQL_USERNAME = os.getenv('SQL_USERNAME')
 SQL_PASSWORD = os.getenv('SQL_PASSWORD')
-
 def get_location_codes():
     cache_key = "locations_data"
     try:
@@ -74,7 +69,7 @@ def get_location_codes():
         
         cached_json = df_locations[['LOCATION_CODE', 'LOCATION_NAME', 'brand']].to_json()
         if isinstance(cache, redis.Redis):
-            cache.set(cache_key, cached_json.encode('utf-8'), ex=86400)  # 24 hours
+            cache.set(cache_key, cached_json.encode('utf-8'), ex=86400) # 24 hours
         else:
             cache.set(cache_key, cached_json, expire=86400)
         
@@ -83,7 +78,6 @@ def get_location_codes():
     except Exception as e:
         print(f"Error fetching location codes: {e}")
         return pd.DataFrame(columns=['LOCATION_CODE', 'LOCATION_NAME', 'brand'])
-
 def get_employee_names():
     cache_key = "employee_names"
     try:
@@ -113,7 +107,7 @@ def get_employee_names():
         
         cached_json = df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']].to_json()
         if isinstance(cache, redis.Redis):
-            cache.set(cache_key, cached_json.encode('utf-8'), ex=86400)  # 24 hours
+            cache.set(cache_key, cached_json.encode('utf-8'), ex=86400) # 24 hours
         else:
             cache.set(cache_key, cached_json, expire=86400)
         
@@ -121,7 +115,6 @@ def get_employee_names():
     except Exception as e:
         logger.error(f"Error fetching employee names: {e}")
         return pd.DataFrame(columns=['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME'])
-
 def get_date_range():
     today = datetime.now()
     yesterday = today - timedelta(days=1)
@@ -137,7 +130,6 @@ def get_date_range():
         dates.append(current.strftime('%d-%b-%y'))
         current += timedelta(days=1)
     return dates, three_suns_ago.strftime('%d-%b-%y'), yesterday.strftime('%d-%b-%y')
-
 def fetch_location_data(location_code, location_name, brand, labor_date):
     try:
         location_code = location_code.zfill(4)
@@ -178,7 +170,6 @@ def fetch_location_data(location_code, location_name, brand, labor_date):
     except requests.exceptions.RequestException as e:
         logger.error(f"Error fetching data for {location_code}: {e} - Ignoring and continuing")
         return pd.DataFrame()
-
 def fetch_data(force_refresh=False):
     cache_key = "timeclock_data"
     if force_refresh:
@@ -271,7 +262,7 @@ def fetch_data(force_refresh=False):
         
         cached_json = df.to_json()
         if isinstance(cache, redis.Redis):
-            cache.set(cache_key, cached_json.encode('utf-8'), ex=900)  # 15 min
+            cache.set(cache_key, cached_json.encode('utf-8'), ex=900) # 15 min
         else:
             cache.set(cache_key, cached_json, expire=900)
         
@@ -291,10 +282,8 @@ def fetch_data(force_refresh=False):
             'last_name': ['Unknown'],
             'refresh_time': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
         })
-
 df = fetch_data()
 dates, start_date, end_date = get_date_range()
-
 app.layout = dbc.Container(fluid=True, children=[
     html.Div([
         html.H1('Timeclock Dashboard (Five Guys USA)', style={'textAlign': 'center', 'color': '#0056b3', 'fontSize': '30px', 'fontFamily': 'Poppins', 'fontWeight': '700', 'marginBottom': '10px', 'marginTop': '20px'}),
@@ -316,8 +305,7 @@ app.layout = dbc.Container(fluid=True, children=[
                                 id='location-filter',
                                 options=[{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())],
                                 value=None,
-                                placeholder="Select Location",
-                                className='filter-box'
+                                placeholder="Select Location"
                             )
                         ], className='dropdown'),
                         width=4,
@@ -382,7 +370,6 @@ app.layout = dbc.Container(fluid=True, children=[
     ),
     dcc.Interval(id='refresh-interval', interval=15*60*1000, n_intervals=0, disabled=True)
 ])
-
 @app.callback(
     [
         Output('late-clockout-table', 'data'),
@@ -477,6 +464,5 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         logger.info("Export to Excel triggered successfully")
     
     return table_data, refresh_text, False, True, alert_rows, location_options, export_data
-
 if __name__ == '__main__':
     app.run_server(debug=False)
