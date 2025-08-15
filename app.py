@@ -262,9 +262,9 @@ def fetch_data(force_refresh=False):
         
         cached_json = df.to_json()
         if isinstance(cache, redis.Redis):
-            cache.set(cache_key, cached_json.encode('utf-8'), ex=900) # 15 min
+            cache.set(cache_key, cached_json.encode('utf-8'), ex=86400) # 24 hours
         else:
-            cache.set(cache_key, cached_json, expire=900)
+            cache.set(cache_key, cached_json, expire=86400)
         
         logger.info(f"Raw combined DataFrame shape: {df.shape}, columns: {df.columns}")
         return df
@@ -284,11 +284,44 @@ def fetch_data(force_refresh=False):
         })
 df = fetch_data()
 dates, start_date, end_date = get_date_range()
+# Prepare initial data for layout
+if 'error' in df.columns:
+    initial_table_data = []
+    initial_refresh_text = "Error occurred"
+    initial_alert_rows = [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'}))]
+else:
+    filtered_df = df.copy()
+    filtered_df['laborDate_dt'] = pd.to_datetime(filtered_df['laborDate'], errors='coerce')
+    filtered_df = filtered_df.sort_values(['laborDate_dt', 'clockOut_dt'], ascending=[False, False])
+    filtered_df.drop(columns=['laborDate_dt'], inplace=True)
+    filtered_df['clockOut'] = filtered_df['clockOut_dt'].dt.strftime('%I:%M %p')
+    filtered_df['laborDate'] = pd.to_datetime(filtered_df['laborDate'], errors='coerce').dt.strftime('%m/%d/%Y')
+    initial_table_data = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'laborDate', 'clockOut']].to_dict('records')
+    
+    alerts = []
+    location_counts = df.groupby('location').size()
+    high_locations = location_counts[location_counts > 5].index
+    for loc in high_locations:
+        alerts.append(f"High number of late clockouts at {loc}!")
+    employee_counts = df.groupby(['employeeNumber', 'first_name', 'last_name', 'location']).size()
+    high_employees = employee_counts[employee_counts > 3]
+    for (emp_num, first, last, loc) in high_employees.index:
+        alerts.append(f"{first} {last} at {loc} has repeated late clock outs")
+    
+    if alerts:
+        initial_alert_rows = [html.Tr([html.Th('Alert Message', style={'backgroundColor': '#dc3545', 'color': 'white', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left', 'fontSize': '14px'})])]
+        for alert in alerts:
+            initial_alert_rows.append(html.Tr([html.Td(alert, style={'backgroundColor': '#fff3cd', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left', 'fontSize': '14px'})]))
+    else:
+        initial_alert_rows = [html.Tr([html.Td("No alerts", colSpan=1, style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'})])]
+    
+    initial_refresh_text = f"Last refreshed: {df['refresh_time'].iloc[0] if 'refresh_time' in df.columns else 'Unknown'} | {len(df)} late clockOut events across {len(dates)} days"
+location_options = [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())]
 app.layout = dbc.Container(fluid=True, children=[
     html.Div([
         html.H1('Timeclock Dashboard (Five Guys USA)', style={'textAlign': 'center', 'color': '#0056b3', 'fontSize': '30px', 'fontFamily': 'Poppins', 'fontWeight': '700', 'marginBottom': '10px', 'marginTop': '20px'}),
         html.Div(f"Date Range: {start_date} to {end_date}", style={'textAlign': 'center', 'fontSize': '16px', 'color': '#6c757d', 'marginBottom': '10px', 'fontWeight': '400', 'fontFamily': 'Inter'}),
-        html.Div(id='refresh-time', style={'textAlign': 'center', 'fontSize': '14px', 'color': '#6c757d', 'marginBottom': '10px', 'fontWeight': '400', 'fontFamily': 'Inter'}),
+        html.Div(id='refresh-time', children=initial_refresh_text, style={'textAlign': 'center', 'fontSize': '14px', 'color': '#6c757d', 'marginBottom': '10px', 'fontWeight': '400', 'fontFamily': 'Inter'}),
         html.Div([
             dbc.Button('Refresh Data', id='refresh-button', n_clicks=0, disabled=False, className='btn-success', style={'marginRight': '8px'}),
             dbc.Button('Export to Excel', id='export-button', n_clicks=0, className='btn-primary')
@@ -303,7 +336,7 @@ app.layout = dbc.Container(fluid=True, children=[
                         html.Div([
                             dcc.Dropdown(
                                 id='location-filter',
-                                options=[{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())],
+                                options=location_options,
                                 value=None,
                                 placeholder="Select Location"
                             )
@@ -337,7 +370,7 @@ app.layout = dbc.Container(fluid=True, children=[
                     {'name': 'Labor Date', 'id': 'laborDate', 'sortable': True},
                     {'name': 'Clock Out Time', 'id': 'clockOut', 'sortable': True}
                 ],
-                data=[],
+                data=initial_table_data,
                 page_action='native',
                 page_size=20,
                 style_table={'overflowX': 'auto'},
@@ -363,7 +396,7 @@ app.layout = dbc.Container(fluid=True, children=[
                 sort_by=[]
             ),
             html.H3('Alerts', style={'textAlign': 'center', 'color': '#2c3e50', 'marginBottom': '20px', 'marginTop': '30px', 'fontFamily': 'Poppins', 'fontWeight': '600', 'fontSize': '24px'}),
-            html.Table(id='alerts-table', children=[], style={'width': '100%', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'overflow': 'hidden'}),
+            html.Table(id='alerts-table', children=initial_alert_rows, style={'width': '100%', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'overflow': 'hidden'}),
             dcc.Download(id='download-excel')
         ]),
         style={'boxShadow': '0 4px 8px rgba(0,0,0,0.1)', 'borderRadius': '10px', 'backgroundColor': 'white', 'margin': '20px auto', 'maxWidth': '80%'}
@@ -377,7 +410,6 @@ app.layout = dbc.Container(fluid=True, children=[
         Output('refresh-button', 'disabled'),
         Output('refresh-interval', 'disabled'),
         Output('alerts-table', 'children'),
-        Output('location-filter', 'options'),
         Output('download-excel', 'data')
     ],
     [
@@ -396,11 +428,11 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
     
     if triggered_id == 'refresh-button' and n_clicks > 0:
         df = fetch_data(force_refresh=True)
-        return [], "Refresh in Progress", True, False, [], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())], None
+        return [], "Refresh in Progress", True, False, [], None
     if triggered_id == 'refresh-interval' and n_intervals > 0:
         df = fetch_data(force_refresh=True)
     if 'error' in df.columns:
-        return [], "Error occurred", False, True, [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'}))], [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())], None
+        return [], "Error occurred", False, True, [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'}))], None
     
     filtered_df = df
     if selected_location:
@@ -424,7 +456,9 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         else:
             filtered_df = filtered_df.sort_values(sort_col, ascending=(sort_direction == 'asc'))
     else:
-        filtered_df = filtered_df.sort_values(['location', 'clockOut_dt'], ascending=False)
+        filtered_df['laborDate_dt'] = pd.to_datetime(filtered_df['laborDate'], errors='coerce')
+        filtered_df = filtered_df.sort_values(['laborDate_dt', 'clockOut_dt'], ascending=[False, False])
+        filtered_df.drop(columns=['laborDate_dt'], inplace=True)
     
     # Format clockOut and laborDate
     filtered_df['clockOut'] = filtered_df['clockOut_dt'].dt.strftime('%I:%M %p')
@@ -450,7 +484,6 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         alert_rows = [html.Tr([html.Td("No alerts", colSpan=1, style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'})])]
     
     refresh_text = f"Last refreshed: {df['refresh_time'].iloc[0] if 'refresh_time' in df.columns else 'Unknown'} | {len(filtered_df)} late clockOut events across {len(dates)} days"
-    location_options = [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())]
     
     # Export to Excel logic
     export_data = None
@@ -463,6 +496,6 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         export_data = dcc.send_bytes(output.getvalue(), filename='late_clockouts.xlsx')
         logger.info("Export to Excel triggered successfully")
     
-    return table_data, refresh_text, False, True, alert_rows, location_options, export_data
+    return table_data, refresh_text, False, True, alert_rows, export_data
 if __name__ == '__main__':
     app.run_server(debug=False)
