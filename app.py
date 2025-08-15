@@ -434,7 +434,7 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
     if 'error' in df.columns:
         return [], "Error occurred", False, True, [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'}))], None
     
-    filtered_df = df
+    filtered_df = df.copy()  # Start with explicit copy to avoid warnings
     if selected_location:
         filtered_df = filtered_df[filtered_df['location'] == selected_location]
     if search_value:
