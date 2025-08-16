@@ -46,15 +46,15 @@ body {
   opacity: 0 !important; /* Invisible but clickable */
   background: transparent !important;
   pointer-events: auto !important;
-  z-index: 1 !important;
+  z-index: 2 !important; /* Higher than text */
   margin: 0 !important;
   padding: 0 !important;
 }
-/* Ensure header text is on top and visible */
+/* Ensure header text is visible but clicks pass through */
 .dash-spreadsheet-inner th .column-header-name {
   position: relative !important;
-  z-index: 2 !important;
-  padding: 0 !important; /* Adjust if text needs more space */
+  z-index: 1 !important; /* Lower than overlay */
+  pointer-events: none !important; /* Clicks ignore text, hit overlay */
 }
 /* Filter box styling (for search input) */
 .filter-box {
