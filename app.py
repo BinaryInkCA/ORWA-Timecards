@@ -339,7 +339,7 @@ app.layout = dbc.Container(fluid=True, children=[
                                 options=location_options,
                                 value=None,
                                 placeholder="Select Location",
-                                searchable=False  # Added to disable search and remove cursor
+                                searchable=False
                             )
                         ], className='dropdown'),
                         width=4,
@@ -423,6 +423,23 @@ clientside_callback(
     """,
     Output('dummy', 'children'),
     Input('late-clockout-table', 'id')
+)
+# Clientside callback to convert refresh time to local timezone
+clientside_callback(
+    """
+    function(text) {
+        if (!text || text === 'Refresh in Progress' || text === 'Error occurred') return text;
+        const parts = text.split(' | ');
+        if (parts.length < 2) return text;
+        const timestamp = parts[0].replace('Last refreshed: ', '');
+        const date = new Date(timestamp + 'Z');  // Treat as UTC
+        if (isNaN(date)) return text;
+        const localTime = date.toLocaleString();
+        return 'Last refreshed: ' + localTime + ' | ' + parts[1];
+    }
+    """,
+    Output('refresh-time', 'children'),
+    Input('refresh-time', 'children')
 )
 @app.callback(
     [
