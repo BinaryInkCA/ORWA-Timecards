@@ -75,7 +75,7 @@ body {
 .dropdown .Select-control {
   min-width: 300px;
   height: 36px;
-  padding: 0 8px;
+  padding: 0 8px 0 4px;
   border-radius: 5px;
   border: 1px solid #ced4da;
   font-size: 14px;
@@ -99,7 +99,7 @@ body {
 .dropdown .Select-input > input {
   font-size: 14px;
   font-family: 'Inter', sans-serif;
-  padding: 0 0 0 8px !important;
+  padding: 0 !important;
   line-height: 36px;
   height: 36px;
 }
