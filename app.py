@@ -338,7 +338,8 @@ app.layout = dbc.Container(fluid=True, children=[
                                 id='location-filter',
                                 options=location_options,
                                 value=None,
-                                placeholder="Select Location"
+                                placeholder="Select Location",
+                                searchable=False  # Added to disable search and remove cursor
                             )
                         ], className='dropdown'),
                         width=4,
