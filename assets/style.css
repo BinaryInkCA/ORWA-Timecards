@@ -94,11 +94,12 @@ body {
 .dropdown .Select-input {
   height: 36px;
   line-height: 36px;
+  width: 100% !important;
 }
 .dropdown .Select-input > input {
   font-size: 14px;
   font-family: 'Inter', sans-serif;
-  padding: 0 !important;
+  padding: 0 0 0 8px !important;
   line-height: 36px;
   height: 36px;
 }
