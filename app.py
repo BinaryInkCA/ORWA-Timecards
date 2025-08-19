@@ -321,7 +321,8 @@ app.layout = dbc.Container(fluid=True, children=[
     html.Div([
         html.H1('Timeclock Dashboard (Five Guys USA)', style={'textAlign': 'center', 'color': '#0056b3', 'fontSize': '30px', 'fontFamily': 'Poppins', 'fontWeight': '700', 'marginBottom': '10px', 'marginTop': '20px'}),
         html.Div(f"Date Range: {start_date} to {end_date}", style={'textAlign': 'center', 'fontSize': '16px', 'color': '#6c757d', 'marginBottom': '10px', 'fontWeight': '400', 'fontFamily': 'Inter'}),
-        html.Div(id='refresh-time', children=initial_refresh_text, style={'textAlign': 'center', 'fontSize': '14px', 'color': '#6c757d', 'marginBottom': '10px', 'fontWeight': '400', 'fontFamily': 'Inter'}),
+        html.Div(id='refresh-time', style={'textAlign': 'center', 'fontSize': '14px', 'color': '#6c757d', 'marginBottom': '10px', 'fontWeight': '400', 'fontFamily': 'Inter'}),
+        html.Div(id='utc-refresh-time', children=initial_refresh_text, style={'display': 'none'}),
         html.Div([
             dbc.Button('Refresh Data', id='refresh-button', n_clicks=0, disabled=False, className='btn-success', style={'marginRight': '8px'}),
             dbc.Button('Export to Excel', id='export-button', n_clicks=0, className='btn-primary')
@@ -434,17 +435,19 @@ clientside_callback(
         const timestamp = parts[0].replace('Last refreshed: ', '');
         const date = new Date(timestamp + 'Z');  // Treat as UTC
         if (isNaN(date)) return text;
-        const localTime = date.toLocaleString();
-        return 'Last refreshed: ' + localTime + ' | ' + parts[1];
+        const localDate = date.toLocaleDateString('en-CA');  // YYYY-MM-DD
+        const localTime = date.toLocaleTimeString('en-GB');  // HH:MM:SS
+        const localTimestamp = localDate + ' ' + localTime;
+        return 'Last refreshed: ' + localTimestamp + ' | ' + parts[1];
     }
     """,
     Output('refresh-time', 'children'),
-    Input('refresh-time', 'children')
+    Input('utc-refresh-time', 'children')
 )
 @app.callback(
     [
         Output('late-clockout-table', 'data'),
-        Output('refresh-time', 'children'),
+        Output('utc-refresh-time', 'children'),
         Output('refresh-button', 'disabled'),
         Output('refresh-interval', 'disabled'),
         Output('alerts-table', 'children'),
@@ -488,7 +491,6 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         sort_col = sort_by[0]['column_id']
         sort_direction = sort_by[0]['direction']
         if sort_col == 'clockOut':
-            # Modified sorting for clockOut to use time of day only
             filtered_df = filtered_df.sort_values('clockOut_dt', key=lambda s: s.dt.time, ascending=(sort_direction == 'asc'))
         elif sort_col == 'laborDate':
             filtered_df = filtered_df.sort_values('laborDate', key=lambda x: pd.to_datetime(x, errors='coerce'), ascending=(sort_direction == 'asc'))
