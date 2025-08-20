@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import StringIO
 from dash.exceptions import PreventUpdate
 from dash import dash_table
+from botbuilder.schema import Activity
 import redis
 import os
 import logging
@@ -575,21 +576,21 @@ ADAPTER = BotFrameworkAdapter(SETTINGS)
 # Bot route (/api/messages)
 @app.server.route('/api/messages', methods=['POST'])
 def messages():
+    logger.info("Received request to /api/messages")
     if request.headers['Content-Type'] == 'application/json':
         body = request.json
     else:
-        return jsonify({'error': 'Unsupported Media Type'}), 415
-    
-    from botbuilder.schema import Activity  # Add this import if not there
-    
-    activity = Activity.deserialize(body)
-    auth_header = request.headers.get('Authorization', '')
+        logger.error("Unsupported Media Type")
+        return 'Unsupported Media Type', 415
     
     try:
+        activity = Activity.deserialize(body)
+        auth_header = request.headers.get('Authorization', '')
         ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
+        logger.info("Processed activity")
         return '', 201
     except Exception as e:
         logger.error(f"Bot error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return str(e), 500
 if __name__ == '__main__':
     app.run_server(debug=False)
