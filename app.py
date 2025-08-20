@@ -50,12 +50,12 @@ def get_location_codes():
                 cached_data = cached_data.decode('utf-8')
         else:
             cached_data = cache.get(cache_key)
-       
+      
         if cached_data:
             logger.info("Using cached location codes")
             print(f"Retrieved {len(pd.read_json(StringIO(cached_data)))} locations from cache")
             return pd.read_json(StringIO(cached_data))
-       
+      
         conn_str = (
             f"DRIVER={{ODBC Driver 17 for SQL Server}};"
             f"SERVER={SQL_SERVER};"
@@ -68,15 +68,15 @@ def get_location_codes():
         query = "SELECT LOCATION_NAME, LOCATION_CODE FROM T_LOCATION WHERE LOCATION_ACTIVE = 'Y' AND (LOCATION_NAME LIKE 'FG - OR%' OR LOCATION_NAME LIKE 'FG - WA%')"
         df_locations = pd.read_sql(query, conn)
         conn.close()
-       
+      
         df_locations['brand'] = 'Five Guys USA'
-       
+      
         cached_json = df_locations[['LOCATION_CODE', 'LOCATION_NAME', 'brand']].to_json()
         if isinstance(cache, redis.Redis):
             cache.set(cache_key, cached_json.encode('utf-8'), ex=86400) # 24 hours
         else:
             cache.set(cache_key, cached_json, expire=86400)
-       
+      
         print(f"Retrieved {len(df_locations)} locations from SQL")
         return df_locations[['LOCATION_CODE', 'LOCATION_NAME', 'brand']]
     except Exception as e:
@@ -91,11 +91,11 @@ def get_employee_names():
                 cached_data = cached_data.decode('utf-8')
         else:
             cached_data = cache.get(cache_key)
-       
+      
         if cached_data:
             logger.info("Using cached employee names")
             return pd.read_json(StringIO(cached_data))
-       
+      
         conn_str = (
             f"DRIVER={{ODBC Driver 17 for SQL Server}};"
             f"SERVER={SQL_SERVER};"
@@ -108,13 +108,13 @@ def get_employee_names():
         query = "SELECT EMPLOYEE_NUMBER, FIRST_NAME, LAST_NAME FROM T_EMPLOYEE"
         df_employees = pd.read_sql(query, conn)
         conn.close()
-       
+      
         cached_json = df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']].to_json()
         if isinstance(cache, redis.Redis):
             cache.set(cache_key, cached_json.encode('utf-8'), ex=86400) # 24 hours
         else:
             cache.set(cache_key, cached_json, expire=86400)
-       
+      
         return df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']]
     except Exception as e:
         logger.error(f"Error fetching employee names: {e}")
@@ -145,16 +145,16 @@ def fetch_location_data(location_code, location_name, brand, labor_date):
             "sitename": API_SITENAME,
             "userid": API_USERID
         }
-       
+      
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
         logger.info(f"Raw API Data for {location_code}: {data}")
-       
+      
         body = data if isinstance(data, list) else data.get('body', [])
         if not body:
             return pd.DataFrame()
-       
+      
         all_details = []
         for item in body:
             details = item.get('timeClockEnhancedDetailDetails', [])
@@ -165,7 +165,7 @@ def fetch_location_data(location_code, location_name, brand, labor_date):
                 df_details['brand'] = brand
                 df_details['laborDate'] = item.get('timeClockEnhancedHeaderDetails', {}).get('laborDate', labor_date)
                 all_details.append(df_details)
-       
+      
         if all_details:
             df = pd.concat(all_details, ignore_index=True)
             df['refresh_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -181,7 +181,7 @@ def fetch_data(force_refresh=False):
             cache.delete(cache_key)
         else:
             cache.delete(cache_key)
-   
+  
     try:
         if isinstance(cache, redis.Redis):
             cached_data = cache.get(cache_key)
@@ -189,7 +189,7 @@ def fetch_data(force_refresh=False):
                 cached_data = cached_data.decode('utf-8')
         else:
             cached_data = cache.get(cache_key)
-       
+      
         if cached_data and not force_refresh:
             logger.info("Using cached data")
             df = pd.read_json(StringIO(cached_data), convert_dates=['clockOut_dt', 'laborDate'])
@@ -197,7 +197,7 @@ def fetch_data(force_refresh=False):
             return df
     except Exception as e:
         logger.error(f"Cache read error: {e}")
-   
+  
     try:
         df_locations = get_location_codes()
         if df_locations.empty:
@@ -213,17 +213,17 @@ def fetch_data(force_refresh=False):
                 'last_name': ['Unknown'],
                 'refresh_time': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
             })
-       
+      
         df_employees = get_employee_names()
         dates = get_date_range()[0]
-       
+      
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = [
                 executor.submit(fetch_location_data, str(row['LOCATION_CODE']), row['LOCATION_NAME'], row['brand'], d)
                 for _, row in df_locations.iterrows() for d in dates
             ]
             all_data = [future.result() for future in as_completed(futures) if not future.result().empty]
-       
+      
         if not all_data:
             return pd.DataFrame({
                 'error': ["No valid data from API"],
@@ -237,7 +237,7 @@ def fetch_data(force_refresh=False):
                 'last_name': ['Unknown'],
                 'refresh_time': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
             })
-       
+      
         df = pd.concat(all_data, ignore_index=True)
         if df.empty:
             return pd.DataFrame({
@@ -252,24 +252,24 @@ def fetch_data(force_refresh=False):
                 'last_name': ['Unknown'],
                 'refresh_time': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
             })
-       
+      
         df['clockOut_dt'] = pd.to_datetime(df['clockOut'], format='%H:%M %m/%d/%Y', errors='coerce')
         df = df[df['clockOut_dt'].notna() & ((df['clockOut_dt'].dt.hour > 0) | ((df['clockOut_dt'].dt.hour == 0) & (df['clockOut_dt'].dt.minute > 0))) & (df['clockOut_dt'].dt.hour <= 4)]
-       
+      
         df['employeeNumber'] = df['employeeNumber'].astype(str)
         df_employees['EMPLOYEE_NUMBER'] = df_employees['EMPLOYEE_NUMBER'].astype(str)
         df = df.merge(df_employees.rename(columns={'EMPLOYEE_NUMBER': 'employeeNumber', 'FIRST_NAME': 'first_name', 'LAST_NAME': 'last_name'}),
                       on='employeeNumber', how='left')
-       
+      
         columns = ['location', 'location_code', 'brand', 'laborDate', 'employeeNumber', 'first_name', 'last_name', 'clockOut', 'clockOut_dt', 'refresh_time']
         df = df[columns]
-       
+      
         cached_json = df.to_json()
         if isinstance(cache, redis.Redis):
             cache.set(cache_key, cached_json.encode('utf-8'), ex=86400) # 24 hours
         else:
             cache.set(cache_key, cached_json, expire=86400)
-       
+      
         logger.info(f"Raw combined DataFrame shape: {df.shape}, columns: {df.columns}")
         return df
     except Exception as e:
@@ -301,7 +301,7 @@ else:
     filtered_df['clockOut'] = filtered_df['clockOut_dt'].dt.strftime('%I:%M %p')
     filtered_df['laborDate'] = pd.to_datetime(filtered_df['laborDate'], errors='coerce').dt.strftime('%m/%d/%Y')
     initial_table_data = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'laborDate', 'clockOut']].to_dict('records')
-   
+  
     alerts = []
     location_counts = df.groupby('location').size()
     high_locations = location_counts[location_counts > 5].index
@@ -311,14 +311,14 @@ else:
     high_employees = employee_counts[employee_counts > 3]
     for (emp_num, first, last, loc) in high_employees.index:
         alerts.append(f"{first} {last} at {loc} has repeated late clock outs")
-   
+  
     if alerts:
         initial_alert_rows = [html.Tr([html.Th('Alert Message', style={'backgroundColor': '#dc3545', 'color': 'white', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left', 'fontSize': '14px'})])]
         for alert in alerts:
             initial_alert_rows.append(html.Tr([html.Td(alert, style={'backgroundColor': '#fff3cd', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left', 'fontSize': '14px'})]))
     else:
         initial_alert_rows = [html.Tr([html.Td("No alerts", colSpan=1, style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'})])]
-   
+  
     initial_refresh_text = f"Last refreshed: {df['refresh_time'].iloc[0] if 'refresh_time' in df.columns else 'Unknown'} | {len(df)} late clockOut events across {len(dates)} days"
 location_options = [{'label': loc, 'value': loc} for loc in sorted(df['location'].unique())]
 app.layout = dbc.Container(fluid=True, children=[
@@ -437,10 +437,10 @@ clientside_callback(
         const parts = text.split(' | ');
         if (parts.length < 2) return text;
         const timestamp = parts[0].replace('Last refreshed: ', '');
-        const date = new Date(timestamp + 'Z');  // Treat as UTC
+        const date = new Date(timestamp + 'Z'); // Treat as UTC
         if (isNaN(date)) return text;
-        const localDate = date.toLocaleDateString('en-CA');  // YYYY-MM-DD
-        const localTime = date.toLocaleTimeString('en-GB');  // HH:MM:SS
+        const localDate = date.toLocaleDateString('en-CA'); // YYYY-MM-DD
+        const localTime = date.toLocaleTimeString('en-GB'); // HH:MM:SS
         const localTimestamp = localDate + ' ' + localTime;
         return 'Last refreshed: ' + localTimestamp + ' | ' + parts[1];
     }
@@ -470,7 +470,7 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
     global df
     ctx = callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
-   
+  
     if triggered_id == 'refresh-button' and n_clicks > 0:
         df = fetch_data(force_refresh=True)
         return [], "Refresh in Progress", True, False, [], None
@@ -478,7 +478,7 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         df = fetch_data(force_refresh=True)
     if 'error' in df.columns:
         return [], "Error occurred", False, True, [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'}))], None
-   
+  
     filtered_df = df.copy() # Start with explicit copy to avoid warnings
     if selected_location:
         filtered_df = filtered_df[filtered_df['location'] == selected_location]
@@ -489,7 +489,7 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
             filtered_df['first_name'].str.lower().str.contains(search_lower, na=False) |
             filtered_df['last_name'].str.lower().str.contains(search_lower, na=False)
         ]
-   
+  
     # Handle table sorting
     if sort_by:
         sort_col = sort_by[0]['column_id']
@@ -504,12 +504,12 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         filtered_df['laborDate_dt'] = pd.to_datetime(filtered_df['laborDate'], errors='coerce')
         filtered_df = filtered_df.sort_values(['laborDate_dt', 'clockOut_dt'], ascending=[False, False])
         filtered_df.drop(columns=['laborDate_dt'], inplace=True)
-   
+  
     # Format clockOut and laborDate
     filtered_df['clockOut'] = filtered_df['clockOut_dt'].dt.strftime('%I:%M %p')
     filtered_df['laborDate'] = pd.to_datetime(filtered_df['laborDate'], errors='coerce').dt.strftime('%m/%d/%Y')
     table_data = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'laborDate', 'clockOut']].to_dict('records')
-   
+  
     # Generate alerts using unfiltered df
     alerts = []
     location_counts = df.groupby('location').size()
@@ -520,16 +520,16 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
     high_employees = employee_counts[employee_counts > 3]
     for (emp_num, first, last, loc) in high_employees.index:
         alerts.append(f"{first} {last} at {loc} has repeated late clock outs")
-   
+  
     if alerts:
         alert_rows = [html.Tr([html.Th('Alert Message', style={'backgroundColor': '#dc3545', 'color': 'white', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left', 'fontSize': '14px'})])]
         for alert in alerts:
             alert_rows.append(html.Tr([html.Td(alert, style={'backgroundColor': '#fff3cd', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left', 'fontSize': '14px'})]))
     else:
         alert_rows = [html.Tr([html.Td("No alerts", colSpan=1, style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'})])]
-   
+  
     refresh_text = f"Last refreshed: {df['refresh_time'].iloc[0] if 'refresh_time' in df.columns else 'Unknown'} | {len(filtered_df)} late clockOut events across {len(dates)} days"
-   
+  
     # Export to Excel logic
     export_data = None
     if triggered_id == 'export-button' and export_n_clicks > 0:
@@ -540,15 +540,14 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
             export_df.to_excel(writer, sheet_name='Late Clockouts', index=False)
         export_data = dcc.send_bytes(output.getvalue(), filename='late_clockouts.xlsx')
         logger.info("Export to Excel triggered successfully")
-   
+  
     return table_data, refresh_text, False, True, alert_rows, export_data
 # Bot imports (add these)
 from flask import request, jsonify
 from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter, TurnContext, MessageFactory
 from botbuilder.schema import ActivityTypes
 from datetime import datetime, timedelta
-import pandas as pd  # Already in your code
-
+import pandas as pd # Already in your code
 # Bot class (reuses your fetch_data)
 class ClockoutBot:
     def on_turn(self, turn_context: TurnContext):
@@ -558,21 +557,19 @@ class ClockoutBot:
                 df = fetch_data()
                 yesterday = (datetime.now() - timedelta(days=1)).strftime('%m/%d/%Y')
                 filtered_df = df[df['laborDate'] == yesterday]
-                
+               
                 if filtered_df.empty:
                     response = "No one forgot to clock out yesterday."
                 else:
                     md_table = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'clockOut']].to_markdown(index=False)
                     response = f"Employees who forgot to clock out yesterday:\n\n{md_table}"
-                
+               
                 turn_context.send_activity(MessageFactory.text(response))
             else:
                 turn_context.send_activity("I can help with late clockouts—try 'who forgot to clock out yesterday'.")
-
 BOT = ClockoutBot()
 SETTINGS = BotFrameworkAdapterSettings(MICROSOFT_APP_ID, MICROSOFT_APP_PASSWORD)
 ADAPTER = BotFrameworkAdapter(SETTINGS)
-
 # Bot route (/api/messages)
 @app.server.route('/api/messages', methods=['POST'])
 def messages():
@@ -582,7 +579,7 @@ def messages():
     else:
         logger.error("Unsupported Media Type")
         return 'Unsupported Media Type', 415
-    
+   
     try:
         activity = Activity.deserialize(body)
         auth_header = request.headers.get('Authorization', '')
