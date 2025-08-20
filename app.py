@@ -433,7 +433,7 @@ clientside_callback(
 clientside_callback(
     """
     function(text) {
-        if (!text || text === 'Refresh in Progress' || text === 'Error occurred') return text;
+        if (!text || text === 'Refresh in Progress' or text === 'Error occurred') return text;
         const parts = text.split(' | ');
         if (parts.length < 2) return text;
         const timestamp = parts[0].replace('Last refreshed: ', '');
