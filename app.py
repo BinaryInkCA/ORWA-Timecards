@@ -37,6 +37,9 @@ SQL_SERVER = os.getenv('SQL_SERVER', "SQL-03")
 SQL_DATABASE = os.getenv('SQL_DATABASE', "TECHSYS")
 SQL_USERNAME = os.getenv('SQL_USERNAME')
 SQL_PASSWORD = os.getenv('SQL_PASSWORD')
+# Bot service env vars
+MICROSOFT_APP_ID = os.getenv('MICROSOFT_APP_ID')
+MICROSOFT_APP_PASSWORD = os.getenv('MICROSOFT_APP_PASSWORD')
 def get_location_codes():
     cache_key = "locations_data"
     try:
@@ -538,5 +541,52 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         logger.info("Export to Excel triggered successfully")
    
     return table_data, refresh_text, False, True, alert_rows, export_data
+# Bot imports (add these)
+from flask import request, jsonify
+from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter, TurnContext, MessageFactory
+from botbuilder.schema import ActivityTypes
+from datetime import datetime, timedelta
+import pandas as pd  # Already in your code
+
+# Bot class (reuses your fetch_data)
+class ClockoutBot:
+    def on_turn(self, turn_context: TurnContext):
+        if turn_context.activity.type == ActivityTypes.message:
+            query = turn_context.activity.text.lower()
+            if "forgot to clock out yesterday" in query:
+                df = fetch_data()
+                yesterday = (datetime.now() - timedelta(days=1)).strftime('%m/%d/%Y')
+                filtered_df = df[df['laborDate'] == yesterday]
+                
+                if filtered_df.empty:
+                    response = "No one forgot to clock out yesterday."
+                else:
+                    md_table = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'clockOut']].to_markdown(index=False)
+                    response = f"Employees who forgot to clock out yesterday:\n\n{md_table}"
+                
+                turn_context.send_activity(MessageFactory.text(response))
+            else:
+                turn_context.send_activity("I can help with late clockouts—try 'who forgot to clock out yesterday'.")
+
+BOT = ClockoutBot()
+SETTINGS = BotFrameworkAdapterSettings(MICROSOFT_APP_ID, MICROSOFT_APP_PASSWORD)
+ADAPTER = BotFrameworkAdapter(SETTINGS)
+
+# Bot route (/api/messages)
+@app.server.route('/api/messages', methods=['POST'])
+def messages():
+    if request.headers['Content-Type'] == 'application/json':
+        body = request.json
+    else:
+        return jsonify(status=415)
+    
+    activity = body
+    auth_header = request.headers.get('Authorization', '')
+    
+    try:
+        ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
+        return jsonify(status=201)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == '__main__':
     app.run_server(debug=False)
