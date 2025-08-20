@@ -574,10 +574,11 @@ ADAPTER = BotFrameworkAdapter(SETTINGS)
 @app.server.route('/api/messages', methods=['POST'])
 def messages():
     logger.info("Received request to /api/messages")
-    if request.headers['Content-Type'] == 'application/json':
+    content_type = request.headers.get('Content-Type', '')
+    if 'application/json' in content_type.lower():
         body = request.json
     else:
-        logger.error("Unsupported Media Type")
+        logger.error("Unsupported Media Type: " + content_type)
         return 'Unsupported Media Type', 415
    
     try:
