@@ -578,15 +578,18 @@ def messages():
     if request.headers['Content-Type'] == 'application/json':
         body = request.json
     else:
-        return jsonify(status=415)
+        return jsonify({'error': 'Unsupported Media Type'}), 415
     
-    activity = body
+    from botbuilder.schema import Activity  # Add this import if not there
+    
+    activity = Activity.deserialize(body)
     auth_header = request.headers.get('Authorization', '')
     
     try:
         ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
-        return jsonify(status=201)
+        return '', 201
     except Exception as e:
+        logger.error(f"Bot error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 if __name__ == '__main__':
     app.run_server(debug=False)
