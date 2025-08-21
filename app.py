@@ -11,7 +11,6 @@ from diskcache import Cache
 from io import StringIO
 from dash.exceptions import PreventUpdate
 from dash import dash_table
-from botbuilder.schema import Activity
 import redis
 import os
 import logging
@@ -37,9 +36,6 @@ SQL_SERVER = os.getenv('SQL_SERVER', "SQL-03")
 SQL_DATABASE = os.getenv('SQL_DATABASE', "TECHSYS")
 SQL_USERNAME = os.getenv('SQL_USERNAME')
 SQL_PASSWORD = os.getenv('SQL_PASSWORD')
-# Bot service env vars
-MICROSOFT_APP_ID = os.getenv('MICROSOFT_APP_ID')
-MICROSOFT_APP_PASSWORD = os.getenv('MICROSOFT_APP_PASSWORD')
 def get_location_codes() -> pd.DataFrame:
     cache_key = "locations_data"
     try:
@@ -593,47 +589,5 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         logger.info("Export to Excel triggered successfully")
  
     return table_data, refresh_text, False, True, alert_rows, export_data
-# Bot class (reuses your fetch_data)
-class ClockoutBot:
-    def on_turn(self, turn_context: TurnContext):
-        if turn_context.activity.type == ActivityTypes.message:
-            query = turn_context.activity.text.lower()
-            if "forgot to clock out yesterday" in query:
-                df = asyncio.run(fetch_data())
-                yesterday = (datetime.now() - timedelta(days=1)).strftime('%m/%d/%Y')
-                filtered_df = df[df['laborDate'] == yesterday]
-              
-                if filtered_df.empty:
-                    response = "No one forgot to clock out yesterday."
-                else:
-                    md_table = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'clockOut']].to_markdown(index=False)
-                    response = f"Employees who forgot to clock out yesterday:\n\n{md_table}"
-              
-                turn_context.send_activity(MessageFactory.text(response))
-            else:
-                turn_context.send_activity("I can help with late clockouts—try 'who forgot to clock out yesterday'.")
-BOT = ClockoutBot()
-SETTINGS = BotFrameworkAdapterSettings(MICROSOFT_APP_ID, MICROSOFT_APP_PASSWORD)
-ADAPTER = BotFrameworkAdapter(SETTINGS)
-# Bot route (/api/messages)
-@app.server.route('/api/messages', methods=['POST'])
-def messages():
-    logger.info("Received request to /api/messages")
-    content_type = request.headers.get('Content-Type', '')
-    if 'application/json' in content_type.lower():
-        body = request.json
-    else:
-        logger.error("Unsupported Media Type: " + content_type)
-        return 'Unsupported Media Type', 415
-  
-    try:
-        activity = Activity.deserialize(body)
-        auth_header = request.headers.get('Authorization', '')
-        ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
-        logger.info("Processed activity")
-        return '', 201
-    except Exception as e:
-        logger.error(f"Bot error: {str(e)}")
-        return str(e), 500
 if __name__ == '__main__':
     app.run_server(debug=False)
