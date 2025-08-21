@@ -620,7 +620,12 @@ class ClockoutBot:
             else:
                 await turn_context.send_activity("I can help with late clockouts—try 'who forgot to clock out yesterday'.")
 BOT = ClockoutBot()
-SETTINGS = BotFrameworkAdapterSettings(MICROSOFT_APP_ID, MICROSOFT_APP_PASSWORD)
+SETTINGS = BotFrameworkAdapterSettings(
+    MICROSOFT_APP_ID,
+    MICROSOFT_APP_PASSWORD,
+    microsoft_app_type="SingleTenant",  # Explicitly set this
+    microsoft_app_tenant_id=os.getenv('MICROSOFT_APP_TENANT_ID')  # Use the new env var
+)
 ADAPTER = BotFrameworkAdapter(SETTINGS)
 # Bot route (/api/messages)
 @app.server.route('/api/messages', methods=['POST'])
