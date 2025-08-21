@@ -602,23 +602,23 @@ from datetime import datetime, timedelta
 import pandas as pd # Already in your code
 # Bot class (reuses your fetch_data)
 class ClockoutBot:
-    def on_turn(self, turn_context: TurnContext):
+    async def on_turn(self, turn_context: TurnContext):
         if turn_context.activity.type == ActivityTypes.message:
             query = turn_context.activity.text.lower()
             if "forgot to clock out yesterday" in query:
                 df = fetch_data()
                 yesterday = (datetime.now() - timedelta(days=1)).strftime('%m/%d/%Y')
                 filtered_df = df[df['laborDate'] == yesterday]
-               
+              
                 if filtered_df.empty:
                     response = "No one forgot to clock out yesterday."
                 else:
                     md_table = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'clockOut']].to_markdown(index=False)
                     response = f"Employees who forgot to clock out yesterday:\n\n{md_table}"
-               
-                turn_context.send_activity(MessageFactory.text(response))
+              
+                await turn_context.send_activity(MessageFactory.text(response))
             else:
-                turn_context.send_activity("I can help with late clockouts—try 'who forgot to clock out yesterday'.")
+                await turn_context.send_activity("I can help with late clockouts—try 'who forgot to clock out yesterday'.")
 BOT = ClockoutBot()
 SETTINGS = BotFrameworkAdapterSettings(MICROSOFT_APP_ID, MICROSOFT_APP_PASSWORD)
 ADAPTER = BotFrameworkAdapter(SETTINGS)
@@ -632,11 +632,11 @@ def messages():
     else:
         logger.error("Unsupported Media Type: " + content_type)
         return 'Unsupported Media Type', 415
-   
+  
     try:
         activity = Activity.deserialize(body)
         auth_header = request.headers.get('Authorization', '')
-        ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
+        asyncio.run(ADAPTER.process_activity(activity, auth_header, BOT.on_turn))
         logger.info("Processed activity")
         return '', 201
     except Exception as e:
