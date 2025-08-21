@@ -434,7 +434,7 @@ clientside_callback(
 clientside_callback(
     """
     function(text) {
-        if (!text || text === 'Refresh in Progress' or text === 'Error occurred') return text;
+        if (!text || text === 'Refresh in Progress' || text === 'Error occurred') return text;
         const parts = text.split(' | ');
         if (parts.length < 2) return text;
         const timestamp = parts[0].replace('Last refreshed: ', '');
@@ -472,11 +472,62 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
     ctx = callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
   
-    if triggered_id == 'refresh-button' and n_clicks > 0:
+    if triggered_id in ['refresh-button', 'refresh-interval'] and (n_clicks > 0 or n_intervals > 0):
         df = fetch_data(force_refresh=True)
-        return [], "Refresh in Progress", True, False, [], None
-    if triggered_id == 'refresh-interval' and n_intervals > 0:
-        df = fetch_data(force_refresh=True)
+        # Compute new table data, alerts, etc.
+        filtered_df = df.copy() # Start with explicit copy to avoid warnings
+        if selected_location:
+            filtered_df = filtered_df[filtered_df['location'] == selected_location]
+        if search_value:
+            search_lower = search_value.lower()
+            filtered_df = filtered_df[
+                filtered_df['employeeNumber'].str.lower().str.contains(search_lower, na=False) |
+                filtered_df['first_name'].str.lower().str.contains(search_lower, na=False) |
+                filtered_df['last_name'].str.lower().str.contains(search_lower, na=False)
+            ]
+  
+        # Handle table sorting
+        if sort_by:
+            sort_col = sort_by[0]['column_id']
+            sort_direction = sort_by[0]['direction']
+            if sort_col == 'clockOut':
+                filtered_df = filtered_df.sort_values('clockOut_dt', key=lambda s: s.dt.time, ascending=(sort_direction == 'asc'))
+            elif sort_col == 'laborDate':
+                filtered_df = filtered_df.sort_values('laborDate', key=lambda x: pd.to_datetime(x, errors='coerce'), ascending=(sort_direction == 'asc'))
+            else:
+                filtered_df = filtered_df.sort_values(sort_col, ascending=(sort_direction == 'asc'))
+        else:
+            filtered_df['laborDate_dt'] = pd.to_datetime(filtered_df['laborDate'], errors='coerce')
+            filtered_df = filtered_df.sort_values(['laborDate_dt', 'clockOut_dt'], ascending=[False, False])
+            filtered_df.drop(columns=['laborDate_dt'], inplace=True)
+  
+        # Format clockOut and laborDate
+        filtered_df['clockOut'] = filtered_df['clockOut_dt'].dt.strftime('%I:%M %p')
+        filtered_df['laborDate'] = pd.to_datetime(filtered_df['laborDate'], errors='coerce').dt.strftime('%m/%d/%Y')
+        table_data = filtered_df[['location', 'employeeNumber', 'first_name', 'last_name', 'laborDate', 'clockOut']].to_dict('records')
+  
+        # Generate alerts using unfiltered df
+        alerts = []
+        location_counts = df.groupby('location').size()
+        high_locations = location_counts[location_counts > 5].index
+        for loc in high_locations:
+            alerts.append(f"High number of late clockouts at {loc}!")
+        employee_counts = df.groupby(['employeeNumber', 'first_name', 'last_name', 'location']).size()
+        high_employees = employee_counts[employee_counts > 3]
+        for (emp_num, first, last, loc) in high_employees.index:
+            alerts.append(f"{first} {last} at {loc} has repeated late clock outs")
+  
+        if alerts:
+            alert_rows = [html.Tr([html.Th('Alert Message', style={'backgroundColor': '#dc3545', 'color': 'white', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left', 'fontSize': '14px'})])]
+            for alert in alerts:
+                alert_rows.append(html.Tr([html.Td(alert, style={'backgroundColor': '#fff3cd', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left', 'fontSize': '14px'})]))
+        else:
+            alert_rows = [html.Tr([html.Td("No alerts", colSpan=1, style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'})])]
+  
+        refresh_text = f"Last refreshed: {df['refresh_time'].iloc[0] if 'refresh_time' in df.columns else 'Unknown'} | {len(filtered_df)} late clockOut events across {len(dates)} days"
+  
+        return table_data, refresh_text, False, True, alert_rows, None
+  
     if 'error' in df.columns:
         return [], "Error occurred", False, True, [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'}))], None
   
@@ -581,7 +632,7 @@ def messages():
     else:
         logger.error("Unsupported Media Type: " + content_type)
         return 'Unsupported Media Type', 415
-    
+   
     try:
         activity = Activity.deserialize(body)
         auth_header = request.headers.get('Authorization', '')
