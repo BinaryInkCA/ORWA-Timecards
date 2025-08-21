@@ -623,8 +623,7 @@ BOT = ClockoutBot()
 SETTINGS = BotFrameworkAdapterSettings(
     MICROSOFT_APP_ID,
     MICROSOFT_APP_PASSWORD,
-    microsoft_app_type="SingleTenant",  # Explicitly set this
-    microsoft_app_tenant_id=os.getenv('MICROSOFT_APP_TENANT_ID')  # Use the new env var
+    channel_auth_tenant=os.getenv('MICROSOFT_APP_TENANT_ID')
 )
 ADAPTER = BotFrameworkAdapter(SETTINGS)
 # Bot route (/api/messages)
