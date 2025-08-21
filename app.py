@@ -573,19 +573,19 @@ SETTINGS = BotFrameworkAdapterSettings(MICROSOFT_APP_ID, MICROSOFT_APP_PASSWORD)
 ADAPTER = BotFrameworkAdapter(SETTINGS)
 # Bot route (/api/messages)
 @app.server.route('/api/messages', methods=['POST'])
-async def messages():
+def messages():
     logger.info("Received request to /api/messages")
     content_type = request.headers.get('Content-Type', '')
-    if 'application/json' not in content_type.lower():
+    if 'application/json' in content_type.lower():
+        body = request.json
+    else:
         logger.error("Unsupported Media Type: " + content_type)
         return 'Unsupported Media Type', 415
-    
-    body = await request.json()
     
     try:
         activity = Activity.deserialize(body)
         auth_header = request.headers.get('Authorization', '')
-        await ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
+        ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
         logger.info("Processed activity")
         return '', 201
     except Exception as e:
