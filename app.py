@@ -3,6 +3,7 @@ sys.path.insert(0, "./.python_packages/lib/python3.10/site-packages")
 import dash
 from dash import dcc, html, Input, Output, callback_context, State, clientside_callback
 import pandas as pd
+import io
 import aiohttp
 import pyodbc
 from datetime import datetime, timedelta
