@@ -18,8 +18,8 @@ import logging
 import asyncio
 from sqlalchemy import create_engine  # Added for pandas warning fix
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging to stdout
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True)
 logger = logging.getLogger(__name__)
 
 # Initialize app
@@ -232,7 +232,6 @@ async def fetch_data(force_refresh: bool = False) -> pd.DataFrame:
             pipe.execute()
         else:
             cache.clear()
-            # For diskcache, clear() clears all, but if more granular needed, delete specific
     try:
         df_locations = get_location_codes()
         if df_locations.empty:
@@ -389,6 +388,34 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         export_data = dcc.send_bytes(output.getvalue(), filename='late_clockouts.xlsx')
         logger.info("Export to Excel triggered successfully")
     return table_data, refresh_text, False, True, alert_rows, export_data, date_range_text, location_options
+
+# Add the missing layout
+app.layout = html.Div([
+    html.H1("Late ClockOut Dashboard", style={'fontFamily': 'Poppins', 'fontWeight': '700', 'textAlign': 'center', 'marginBottom': '20px'}),
+    html.Div([
+        dcc.Dropdown(id='location-filter', options=[], placeholder="Select Location", className='dropdown', style={'width': '300px', 'marginRight': '10px'}),
+        dcc.Input(id='search-input', type='text', placeholder="Search by Employee", className='filter-box', style={'width': '300px', 'marginRight': '10px'}),
+        html.Button('Refresh', id='refresh-button', className='btn-primary', style={'marginRight': '10px'}),
+        html.Button('Export to Excel', id='export-button', className='btn-success')
+    ], style={'display': 'flex', 'justifyContent': 'center', 'marginBottom': '20px'}),
+    html.Div(id='date-range-display', style={'textAlign': 'center', 'marginBottom': '10px', 'fontSize': '16px', 'fontFamily': 'Inter'}),
+    html.Div(id='utc-refresh-time', style={'display': 'none'}),
+    html.Div(id='refresh-time', style={'textAlign': 'center', 'marginBottom': '20px', 'fontSize': '14px', 'fontFamily': 'Inter', 'color': '#6c757d'}),
+    dash_table.DataTable(
+        id='late-clockout-table',
+        columns=[{"name": i, "id": i} for i in ['location', 'employeeNumber', 'first_name', 'last_name', 'laborDate', 'clockOut']],
+        data=[],
+        sort_action='native',
+        style_table={'overflowX': 'auto', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'margin': '0 auto', 'width': '80%'},
+        style_cell={'textAlign': 'left', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'fontSize': '14px'},
+        style_header={'backgroundColor': '#007bff', 'color': 'white', 'fontWeight': '500', 'textAlign': 'left', 'padding': '8px', 'borderBottom': '2px solid #dee2e6'},
+        style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': '#f9f9f9'}, {'if': {'state': 'active'}, 'backgroundColor': '#e9ecef'}]
+    ),
+    html.H2("Alerts", style={'fontFamily': 'Poppins', 'fontWeight': '500', 'textAlign': 'center', 'marginTop': '30px', 'marginBottom': '10px'}),
+    html.Table(id='alerts-table', style={'width': '80%', 'margin': '0 auto', 'borderCollapse': 'collapse', 'border': '1px solid #dee2e6'}),
+    dcc.Download(id='download-excel'),
+    dcc.Interval(id='refresh-interval', interval=60*60*1000, disabled=True)  # 1 hour auto-refresh, initially disabled
+])
 
 # Set initial empty df for lazy loading
 df = pd.DataFrame()
