@@ -16,15 +16,17 @@ import redis
 import os
 import logging
 import asyncio
-from sqlalchemy import create_engine  # Added for pandas warning fix
+from sqlalchemy import create_engine
+from flask import Flask  # Added for logging
 
-# Configure logging to stdout
-logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True)
+# Configure logging to stdout with flush
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Initialize app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, '/assets/style.css'])
-server = app.server
+server = Flask(__name__)  # Use Flask for server
+app.server = server
 
 # Cache setup: Azure Redis if REDIS_URL set, else local diskcache
 REDIS_URL = os.getenv('REDIS_URL')
@@ -141,7 +143,7 @@ def get_date_range() -> tuple[list[str], str, str]:
     if days_to_prev_sun == 0:
         days_to_prev_sun = 7
     prev_sun = today - timedelta(days=days_to_prev_sun)
-    three_suns_ago = prev_sun - timedelta(weeks=2)
+    three_suns_ago = prev_sun - timedelta(weeks=1)  # Reduced to 1 week
     dates = []
     current = three_suns_ago
     while current <= yesterday:
@@ -420,5 +422,15 @@ app.layout = html.Div([
 # Set initial empty df for lazy loading
 df = pd.DataFrame()
 
+# Sync Dash logger with Gunicorn for Azure logs
+if not app.debug:
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)
+
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    app.run_server(debug=True)
+else:
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)
