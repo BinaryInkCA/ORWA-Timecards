@@ -17,7 +17,6 @@ import os
 import logging
 import asyncio
 from sqlalchemy import create_engine
-from flask import Flask  # Added for logging
 
 # Configure logging to stdout with flush
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -25,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, '/assets/style.css'])
-server = Flask(__name__)  # Use Flask for server
-app.server = server
+server = app.server
 
 # Cache setup: Azure Redis if REDIS_URL set, else local diskcache
 REDIS_URL = os.getenv('REDIS_URL')
@@ -34,14 +32,18 @@ if REDIS_URL:
     try:
         cache = redis.Redis.from_url(REDIS_URL)
         cache.ping()  # Test connection
+        print("Redis connected successfully")  # Use print for Azure logs
         logger.info("Redis connected successfully")
     except Exception as e:
+        print(f"Redis connection failed: {e} - Falling back to diskcache")
         logger.error(f"Redis connection failed: {e} - Falling back to diskcache")
         cache = Cache("cache")  # Local fallback
 else:
+    print("No REDIS_URL found - Using diskcache")
     logger.info("No REDIS_URL found - Using diskcache")
     cache = Cache("cache")
 
+print(f"Cache type: {'Redis' if isinstance(cache, redis.Redis) else 'Diskcache'}")
 logger.info(f"Cache type: {'Redis' if isinstance(cache, redis.Redis) else 'Diskcache'}")
 
 # Environment variables for Azure
@@ -65,6 +67,7 @@ def get_location_codes() -> pd.DataFrame:
             cached_data = cache.get(cache_key)
     
         if cached_data:
+            print("Using cached location codes")
             logger.info("Using cached location codes")
             return pd.read_json(StringIO(cached_data))
     
@@ -90,9 +93,11 @@ def get_location_codes() -> pd.DataFrame:
         else:
             cache.set(cache_key, cached_json, expire=86400)
     
+        print(f"Retrieved {len(df_locations)} locations from SQL")
         logger.info(f"Retrieved {len(df_locations)} locations from SQL")
         return df_locations[['LOCATION_CODE', 'LOCATION_NAME', 'brand']]
     except Exception as e:
+        print(f"Error fetching location codes: {e}")
         logger.error(f"Error fetching location codes: {e}")
         return pd.DataFrame(columns=['LOCATION_CODE', 'LOCATION_NAME', 'brand'])
 
@@ -107,6 +112,7 @@ def get_employee_names() -> pd.DataFrame:
             cached_data = cache.get(cache_key)
     
         if cached_data:
+            print("Using cached employee names")
             logger.info("Using cached employee names")
             return pd.read_json(StringIO(cached_data))
     
@@ -132,6 +138,7 @@ def get_employee_names() -> pd.DataFrame:
     
         return df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']]
     except Exception as e:
+        print(f"Error fetching employee names: {e}")
         logger.error(f"Error fetching employee names: {e}")
         return pd.DataFrame(columns=['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME'])
 
@@ -165,6 +172,7 @@ async def fetch_location_data(location_code: str, location_name: str, brand: str
                 cached_data = cache.get(cache_key)
     
             if cached_data:
+                print(f"Using cached data for {location_code} on {labor_date}")
                 logger.info(f"Using cached data for {location_code} on {labor_date}")
                 return pd.read_json(StringIO(cached_data))
     
@@ -184,6 +192,7 @@ async def fetch_location_data(location_code: str, location_name: str, brand: str
                     async with session.get(url, headers=headers, timeout=30) as response:
                         response.raise_for_status()
                         data = await response.json()
+                        print(f"Raw API Data for {location_code}: {data}")
                         logger.info(f"Raw API Data for {location_code}: {data}")
     
                 body = data if isinstance(data, list) else data.get('body', [])
@@ -212,14 +221,17 @@ async def fetch_location_data(location_code: str, location_name: str, brand: str
                     return df
                 return pd.DataFrame()
             except aiohttp.ClientError as e:
+                print(f"Attempt {attempt+1} failed for {location_code}: {e}")
                 logger.warning(f"Attempt {attempt+1} failed for {location_code}: {e}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(retry_delay)
                     retry_delay *= 2  # exponential backoff
                 else:
+                    print(f"Max retries exceeded for {location_code}: {e} - Ignoring and continuing")
                     logger.error(f"Max retries exceeded for {location_code}: {e} - Ignoring and continuing")
                     return pd.DataFrame()
     except Exception as e:
+        print(f"Unexpected error fetching data for {location_code}: {e}")
         logger.error(f"Unexpected error fetching data for {location_code}: {e}")
         return pd.DataFrame()
 
@@ -237,6 +249,7 @@ async def fetch_data(force_refresh: bool = False) -> pd.DataFrame:
     try:
         df_locations = get_location_codes()
         if df_locations.empty:
+            print("No locations fetched from SQL - using fallback")
             logger.warning("No locations fetched from SQL - using fallback")
             return pd.DataFrame({
                 'error': ["No valid locations from SQL"],
@@ -264,6 +277,7 @@ async def fetch_data(force_refresh: bool = False) -> pd.DataFrame:
         all_data = [df for df in await asyncio.gather(*tasks) if not df.empty]
     
         if not all_data:
+            print("No data from any API calls - using fallback")
             logger.warning("No data from any API calls - using fallback")
             return pd.DataFrame()
         
@@ -274,6 +288,7 @@ async def fetch_data(force_refresh: bool = False) -> pd.DataFrame:
         df['clockOut_dt'] = pd.to_datetime(df['clockOut'], errors='coerce')
         return df
     except Exception as e:
+        print(f"Error in fetch_data: {e}")
         logger.error(f"Error in fetch_data: {e}")
         return pd.DataFrame()
 
@@ -319,6 +334,9 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
     global df
     ctx = callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+    
+    print("Callback triggered: " + str(triggered_id))
+    logger.info("Callback triggered: " + str(triggered_id))
     
     # Always compute current date range and locations for robustness
     dates, start_date, end_date = get_date_range()
@@ -388,6 +406,7 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             export_df.to_excel(writer, sheet_name='Late Clockouts', index=False)
         export_data = dcc.send_bytes(output.getvalue(), filename='late_clockouts.xlsx')
+        print("Export to Excel triggered successfully")
         logger.info("Export to Excel triggered successfully")
     return table_data, refresh_text, False, True, alert_rows, export_data, date_range_text, location_options
 
