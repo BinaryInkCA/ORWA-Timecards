@@ -14,6 +14,7 @@ from dash import dash_table
 import os
 import logging
 import asyncio
+from sqlalchemy import create_engine  # Added for pandas warning fix
 
 # Configure logging to stdout with flush
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -43,10 +44,11 @@ def get_location_codes() -> pd.DataFrame:
             f"PWD={SQL_PASSWORD};"
             "Connect Timeout=60;"
         )
-        conn = pyodbc.connect(conn_str)
+        # Use SQLAlchemy to avoid pandas warning
+        odbc_connect_str = conn_str.replace(';', '&')
+        engine = create_engine(f'mssql+pyodbc:///?odbc_connect={odbc_connect_str}')
         query = "SELECT LOCATION_NAME, LOCATION_CODE FROM T_LOCATION WHERE LOCATION_ACTIVE = 'Y' AND (LOCATION_NAME LIKE 'FG - OR%' OR LOCATION_NAME LIKE 'FG - WA%')"
-        df_locations = pd.read_sql(query, conn)
-        conn.close()
+        df_locations = pd.read_sql(query, engine)
     
         df_locations['brand'] = 'Five Guys USA'
     
@@ -66,10 +68,11 @@ def get_employee_names() -> pd.DataFrame:
             f"PWD={SQL_PASSWORD};"
             "Connect Timeout=60;"
         )
-        conn = pyodbc.connect(conn_str)
+        # Use SQLAlchemy to avoid pandas warning
+        odbc_connect_str = conn_str.replace(';', '&')
+        engine = create_engine(f'mssql+pyodbc:///?odbc_connect={odbc_connect_str}')
         query = "SELECT EMPLOYEE_NUMBER, FIRST_NAME, LAST_NAME FROM T_EMPLOYEE"
-        df_employees = pd.read_sql(query, conn)
-        conn.close()
+        df_employees = pd.read_sql(query, engine)
     
         return df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']]
     except Exception as e:
@@ -182,6 +185,8 @@ async def fetch_data() -> pd.DataFrame:
         
         df = pd.concat(all_data, ignore_index=True)
         df = df.merge(df_employees, left_on='employeeNumber', right_on='EMPLOYEE_NUMBER', how='left').drop(columns='EMPLOYEE_NUMBER', errors='ignore')
+        df['first_name'] = df['first_name'].fillna('Unknown')
+        df['last_name'] = df['last_name'].fillna('Unknown')
         df['clockOut_dt'] = pd.to_datetime(df['clockOut'], errors='coerce')
         return df
     except Exception as e:
