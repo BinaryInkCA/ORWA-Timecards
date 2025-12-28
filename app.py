@@ -6,7 +6,7 @@ import pandas as pd
 import io
 import aiohttp
 import pyodbc
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 import dash_bootstrap_components as dbc
 from io import StringIO
 from dash.exceptions import PreventUpdate
@@ -16,7 +16,7 @@ import logging
 import asyncio
 from sqlalchemy import create_engine
 
-# Configure logging
+# Configure logging to stdout with flush
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ def get_location_codes() -> pd.DataFrame:
             f"PWD={SQL_PASSWORD};"
             "Connect Timeout=60;"
         )
+        # Use SQLAlchemy to avoid pandas warning
         odbc_connect_str = conn_str.replace(';', '&')
         engine = create_engine(f'mssql+pyodbc:///?odbc_connect={odbc_connect_str}')
         query = "SELECT LOCATION_NAME, LOCATION_CODE FROM T_LOCATION WHERE LOCATION_ACTIVE = 'Y' AND (LOCATION_NAME LIKE 'FG - OR%' OR LOCATION_NAME LIKE 'FG - WA%')"
@@ -67,6 +68,7 @@ def get_employee_names() -> pd.DataFrame:
             f"PWD={SQL_PASSWORD};"
             "Connect Timeout=60;"
         )
+        # Use SQLAlchemy to avoid pandas warning
         odbc_connect_str = conn_str.replace(';', '&')
         engine = create_engine(f'mssql+pyodbc:///?odbc_connect={odbc_connect_str}')
         query = "SELECT EMPLOYEE_NUMBER, FIRST_NAME, LAST_NAME FROM T_EMPLOYEE"
@@ -172,7 +174,7 @@ async def fetch_data() -> pd.DataFrame:
         sem = asyncio.Semaphore(50)  # Adjust based on testing; 50 concurrent tasks
         async def limited_fetch(row, d):
             async with sem:
-                return await fetch_location_data(str(row['LOCATION_CODE']), row['LOCATION_NAME', row['brand'], d)
+                return await fetch_location_data(str(row['LOCATION_CODE']), row['LOCATION_NAME'], row['brand'], d)
         
         tasks = [limited_fetch(row, d) for _, row in df_locations.iterrows() for d in dates]
         all_data = [df for df in await asyncio.gather(*tasks) if not df.empty]
