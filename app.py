@@ -87,7 +87,7 @@ def get_date_range() -> tuple[list[str], str, str]:
     if days_to_prev_sun == 0:
         days_to_prev_sun = 7
     prev_sun = today - timedelta(days=days_to_prev_sun)
-    three_suns_ago = prev_sun - timedelta(weeks=1)  # Reduced to 1 week
+    three_suns_ago = prev_sun - timedelta(weeks=2)  # Back to 2 weeks
     dates = []
     current = three_suns_ago
     while current <= yesterday:
@@ -134,7 +134,7 @@ async def fetch_location_data(location_code: str, location_name: str, brand: str
     
                 if all_details:
                     df = pd.concat(all_details, ignore_index=True)
-                    df['refresh_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S') # Assume local time; adjust to UTC if needed
+                    df['refresh_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     return df
                 return pd.DataFrame()
             except aiohttp.ClientError as e:
@@ -184,9 +184,7 @@ async def fetch_data() -> pd.DataFrame:
             return pd.DataFrame()
         
         df = pd.concat(all_data, ignore_index=True)
-        # Merge with employees to add first/last names (as used in callback)
         df = df.merge(df_employees, left_on='employeeNumber', right_on='EMPLOYEE_NUMBER', how='left').drop(columns='EMPLOYEE_NUMBER', errors='ignore')
-        # Parse clockOut to datetime for sorting/filtering
         df['clockOut_dt'] = pd.to_datetime(df['clockOut'], errors='coerce')
         return df
     except Exception as e:
