@@ -38,13 +38,12 @@ def get_location_codes() -> pd.DataFrame:
     try:
         conn_str = (
             f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-            f"SERVER={SQL_SERVER};"
+            f"SERVER=tcp:{SQL_SERVER},1433;"  # Added 'tcp:' prefix and port to fix ODBC parsing for hybrid relay
             f"DATABASE={SQL_DATABASE};"
             f"UID={SQL_USERNAME};"
             f"PWD={SQL_PASSWORD};"
             "Connect Timeout=60;"
         )
-        # Use SQLAlchemy to avoid pandas warning
         odbc_connect_str = conn_str.replace(';', '&')
         engine = create_engine(f'mssql+pyodbc:///?odbc_connect={odbc_connect_str}')
         query = "SELECT LOCATION_NAME, LOCATION_CODE FROM T_LOCATION WHERE LOCATION_ACTIVE = 'Y' AND (LOCATION_NAME LIKE 'FG - OR%' OR LOCATION_NAME LIKE 'FG - WA%')"
@@ -62,13 +61,12 @@ def get_employee_names() -> pd.DataFrame:
     try:
         conn_str = (
             f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-            f"SERVER={SQL_SERVER};"
+            f"SERVER=tcp:{SQL_SERVER},1433;"  # Added 'tcp:' prefix and port to fix ODBC parsing for hybrid relay
             f"DATABASE={SQL_DATABASE};"
             f"UID={SQL_USERNAME};"
             f"PWD={SQL_PASSWORD};"
             "Connect Timeout=60;"
         )
-        # Use SQLAlchemy to avoid pandas warning
         odbc_connect_str = conn_str.replace(';', '&')
         engine = create_engine(f'mssql+pyodbc:///?odbc_connect={odbc_connect_str}')
         query = "SELECT EMPLOYEE_NUMBER, FIRST_NAME, LAST_NAME FROM T_EMPLOYEE"
@@ -87,7 +85,7 @@ def get_date_range() -> tuple[list[str], str, str]:
     if days_to_prev_sun == 0:
         days_to_prev_sun = 7
     prev_sun = today - timedelta(days=days_to_prev_sun)
-    three_suns_ago = prev_sun - timedelta(weeks=2)  # Back to 2 weeks
+    three_suns_ago = prev_sun - timedelta(weeks=2)
     dates = []
     current = three_suns_ago
     while current <= yesterday:
