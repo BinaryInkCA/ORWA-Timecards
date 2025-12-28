@@ -6,7 +6,7 @@ import pandas as pd
 import io
 import aiohttp
 import pyodbc
-from datetime import datetime, timedelta
+from datetime import timedelta, datetime
 import dash_bootstrap_components as dbc
 from io import StringIO
 from dash.exceptions import PreventUpdate
@@ -16,7 +16,7 @@ import logging
 import asyncio
 from sqlalchemy import create_engine
 
-# Configure logging to stdout with flush
+# Configure logging
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,6 @@ def get_location_codes() -> pd.DataFrame:
             f"PWD={SQL_PASSWORD};"
             "Connect Timeout=60;"
         )
-        # Use SQLAlchemy to avoid pandas warning
         odbc_connect_str = conn_str.replace(';', '&')
         engine = create_engine(f'mssql+pyodbc:///?odbc_connect={odbc_connect_str}')
         query = "SELECT LOCATION_NAME, LOCATION_CODE FROM T_LOCATION WHERE LOCATION_ACTIVE = 'Y' AND (LOCATION_NAME LIKE 'FG - OR%' OR LOCATION_NAME LIKE 'FG - WA%')"
@@ -68,7 +67,6 @@ def get_employee_names() -> pd.DataFrame:
             f"PWD={SQL_PASSWORD};"
             "Connect Timeout=60;"
         )
-        # Use SQLAlchemy to avoid pandas warning
         odbc_connect_str = conn_str.replace(';', '&')
         engine = create_engine(f'mssql+pyodbc:///?odbc_connect={odbc_connect_str}')
         query = "SELECT EMPLOYEE_NUMBER, FIRST_NAME, LAST_NAME FROM T_EMPLOYEE"
@@ -87,7 +85,7 @@ def get_date_range() -> tuple[list[str], str, str]:
     if days_to_prev_sun == 0:
         days_to_prev_sun = 7
     prev_sun = today - timedelta(days=days_to_prev_sun)
-    three_suns_ago = prev_sun - timedelta(weeks=1)  # Reduced to 1 week for efficiency
+    three_suns_ago = prev_sun - timedelta(weeks=1)  # Reduced to 1 week
     dates = []
     current = three_suns_ago
     while current <= yesterday:
@@ -134,7 +132,7 @@ async def fetch_location_data(location_code: str, location_name: str, brand: str
     
                 if all_details:
                     df = pd.concat(all_details, ignore_index=True)
-                    df['refresh_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    df['refresh_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S') # Assume local time; adjust to UTC if needed
                     return df
                 return pd.DataFrame()
             except aiohttp.ClientError as e:
@@ -170,11 +168,11 @@ async def fetch_data() -> pd.DataFrame:
         df_employees = get_employee_names()
         dates = get_date_range()[0]
     
-        # Semaphore for concurrency limit
-        sem = asyncio.Semaphore(50)
+        # Add semaphore to limit concurrency and prevent overload/timeout
+        sem = asyncio.Semaphore(50)  # Adjust based on testing; 50 concurrent tasks
         async def limited_fetch(row, d):
             async with sem:
-                return await fetch_location_data(str(row['LOCATION_CODE']), row['LOCATION_NAME'], row['brand'], d)
+                return await fetch_location_data(str(row['LOCATION_CODE']), row['LOCATION_NAME', row['brand'], d)
         
         tasks = [limited_fetch(row, d) for _, row in df_locations.iterrows() for d in dates]
         all_data = [df for df in await asyncio.gather(*tasks) if not df.empty]
@@ -184,7 +182,9 @@ async def fetch_data() -> pd.DataFrame:
             return pd.DataFrame()
         
         df = pd.concat(all_data, ignore_index=True)
+        # Merge with employees to add first/last names (as used in callback)
         df = df.merge(df_employees, left_on='employeeNumber', right_on='EMPLOYEE_NUMBER', how='left').drop(columns='EMPLOYEE_NUMBER', errors='ignore')
+        # Parse clockOut to datetime for sorting/filtering
         df['clockOut_dt'] = pd.to_datetime(df['clockOut'], errors='coerce')
         return df
     except Exception as e:
@@ -304,6 +304,34 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         export_data = dcc.send_bytes(output.getvalue(), filename='late_clockouts.xlsx')
         logger.info("Export to Excel triggered successfully")
     return table_data, refresh_text, False, True, alert_rows, export_data, date_range_text, location_options
+
+# Add the missing layout
+app.layout = html.Div([
+    html.H1("Late ClockOut Dashboard", style={'fontFamily': 'Poppins', 'fontWeight': '700', 'textAlign': 'center', 'marginBottom': '20px'}),
+    html.Div([
+        dcc.Dropdown(id='location-filter', options=[], placeholder="Select Location", className='dropdown', style={'width': '300px', 'marginRight': '10px'}),
+        dcc.Input(id='search-input', type='text', placeholder="Search by Employee", className='filter-box', style={'width': '300px', 'marginRight': '10px'}),
+        html.Button('Refresh', id='refresh-button', className='btn-primary', style={'marginRight': '10px'}),
+        html.Button('Export to Excel', id='export-button', className='btn-success')
+    ], style={'display': 'flex', 'justifyContent': 'center', 'marginBottom': '20px'}),
+    html.Div(id='date-range-display', style={'textAlign': 'center', 'marginBottom': '10px', 'fontSize': '16px', 'fontFamily': 'Inter'}),
+    html.Div(id='utc-refresh-time', style={'display': 'none'}),
+    html.Div(id='refresh-time', style={'textAlign': 'center', 'marginBottom': '20px', 'fontSize': '14px', 'fontFamily': 'Inter', 'color': '#6c757d'}),
+    dash_table.DataTable(
+        id='late-clockout-table',
+        columns=[{"name": i, "id": i} for i in ['location', 'employeeNumber', 'first_name', 'last_name', 'laborDate', 'clockOut']],
+        data=[],
+        sort_action='native',
+        style_table={'overflowX': 'auto', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'margin': '0 auto', 'width': '80%'},
+        style_cell={'textAlign': 'left', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'fontSize': '14px'},
+        style_header={'backgroundColor': '#007bff', 'color': 'white', 'fontWeight': '500', 'textAlign': 'left', 'padding': '8px', 'borderBottom': '2px solid #dee2e6'},
+        style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': '#f9f9f9'}, {'if': {'state': 'active'}, 'backgroundColor': '#e9ecef'}]
+    ),
+    html.H2("Alerts", style={'fontFamily': 'Poppins', 'fontWeight': '500', 'textAlign': 'center', 'marginTop': '30px', 'marginBottom': '10px'}),
+    html.Table(id='alerts-table', style={'width': '80%', 'margin': '0 auto', 'borderCollapse': 'collapse', 'border': '1px solid #dee2e6'}),
+    dcc.Download(id='download-excel'),
+    dcc.Interval(id='refresh-interval', interval=60*60*1000, disabled=True)  # 1 hour auto-refresh, initially disabled
+])
 
 # Set initial empty df for lazy loading
 df = pd.DataFrame()
