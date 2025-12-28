@@ -14,7 +14,6 @@ from dash import dash_table
 import os
 import logging
 import asyncio
-from sqlalchemy import create_engine
 
 # Configure logging to stdout with flush
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -38,16 +37,16 @@ def get_location_codes() -> pd.DataFrame:
     try:
         conn_str = (
             f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-            f"SERVER=tcp:{SQL_SERVER},1433;"  # Added 'tcp:' prefix and port to fix ODBC parsing for hybrid relay
+            f"SERVER={SQL_SERVER};"
             f"DATABASE={SQL_DATABASE};"
             f"UID={SQL_USERNAME};"
             f"PWD={SQL_PASSWORD};"
             "Connect Timeout=60;"
         )
-        odbc_connect_str = conn_str.replace(';', '&')
-        engine = create_engine(f'mssql+pyodbc:///?odbc_connect={odbc_connect_str}')
+        conn = pyodbc.connect(conn_str)
         query = "SELECT LOCATION_NAME, LOCATION_CODE FROM T_LOCATION WHERE LOCATION_ACTIVE = 'Y' AND (LOCATION_NAME LIKE 'FG - OR%' OR LOCATION_NAME LIKE 'FG - WA%')"
-        df_locations = pd.read_sql(query, engine)
+        df_locations = pd.read_sql(query, conn)
+        conn.close()
     
         df_locations['brand'] = 'Five Guys USA'
     
@@ -61,16 +60,16 @@ def get_employee_names() -> pd.DataFrame:
     try:
         conn_str = (
             f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-            f"SERVER=tcp:{SQL_SERVER},1433;"  # Added 'tcp:' prefix and port to fix ODBC parsing for hybrid relay
+            f"SERVER={SQL_SERVER};"
             f"DATABASE={SQL_DATABASE};"
             f"UID={SQL_USERNAME};"
             f"PWD={SQL_PASSWORD};"
             "Connect Timeout=60;"
         )
-        odbc_connect_str = conn_str.replace(';', '&')
-        engine = create_engine(f'mssql+pyodbc:///?odbc_connect={odbc_connect_str}')
+        conn = pyodbc.connect(conn_str)
         query = "SELECT EMPLOYEE_NUMBER, FIRST_NAME, LAST_NAME FROM T_EMPLOYEE"
-        df_employees = pd.read_sql(query, engine)
+        df_employees = pd.read_sql(query, conn)
+        conn.close()
     
         return df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']]
     except Exception as e:
