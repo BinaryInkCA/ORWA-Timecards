@@ -184,17 +184,24 @@ async def fetch_data() -> pd.DataFrame:
     
         if not all_data:
             logger.warning("No data from any API calls - using fallback")
-            return pd.DataFrame()
+            return pd.DataFrame({
+                'error': ["No data from any API calls"],
+                'refresh_time': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
+            })
         
         df = pd.concat(all_data, ignore_index=True)
         df = df.merge(df_employees, left_on='employeeNumber', right_on='EMPLOYEE_NUMBER', how='left').drop(columns='EMPLOYEE_NUMBER', errors='ignore')
+        df = df.rename(columns={'FIRST_NAME': 'first_name', 'LAST_NAME': 'last_name'})
         df['first_name'] = df['first_name'].fillna('Unknown')
         df['last_name'] = df['last_name'].fillna('Unknown')
         df['clockOut_dt'] = pd.to_datetime(df['clockOut'], errors='coerce')
         return df
     except Exception as e:
         logger.error(f"Error in fetch_data: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame({
+            'error': [str(e)],
+            'refresh_time': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
+        })
 
 clientside_callback(
     """
@@ -253,7 +260,8 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
         df = asyncio.run(fetch_data())
     
     if 'error' in df.columns:
-        return [], "Error occurred", False, True, [html.Tr(html.Td("Error fetching data: " + df['error'].iloc[0], style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'}))], None, date_range_text, location_options
+        error_msg = df['error'].iloc[0] if not df.empty else "Unknown error"
+        return [], f"Error occurred | 0 late clockOut events", False, True, [html.Tr(html.Td(f"Error fetching data: {error_msg}", style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'}))], None, date_range_text, location_options
     
     filtered_df = df.copy() # Start with explicit copy to avoid warnings
     if selected_location:
@@ -297,7 +305,7 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
             alert_rows.append(html.Tr([html.Td(alert, style={'backgroundColor': '#fff3cd', 'padding': '8px', 'border': '1px solid #dee2e6', 'fontFamily': 'Inter', 'textAlign': 'left', 'fontSize': '14px'})]))
     else:
         alert_rows = [html.Tr([html.Td("No alerts", colSpan=1, style={'padding': '8px', 'border': '1px solid #dee2e6', 'textAlign': 'center', 'fontFamily': 'Inter', 'fontSize': '14px'})])]
-    refresh_text = f"Last refreshed: {df['refresh_time'].iloc[0] if 'refresh_time' in df.columns else 'Unknown'} | {len(filtered_df)} late clockOut events across {len(dates)} days"
+    refresh_text = f"Last refreshed: {df['refresh_time'].iloc[0] if 'refresh_time' in df.columns and not df.empty else 'Unknown'} | {len(filtered_df)} late clockOut events across {len(dates)} days"
     # Export to Excel logic
     export_data = None
     if triggered_id == 'export-button' and export_n_clicks > 0:
