@@ -8,6 +8,7 @@ import aiohttp
 import pyodbc
 from datetime import datetime, timedelta
 import dash_bootstrap_components as dbc
+from diskcache import Cache
 from io import StringIO
 from dash.exceptions import PreventUpdate
 from dash import dash_table
@@ -20,6 +21,8 @@ logger = logging.getLogger(__name__)
 # Initialize app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, '/assets/style.css'])
 server = app.server
+# Cache setup: Local diskcache
+cache = Cache("cache", size_limit=10**9)  # 1GB size limit for reliability; auto-culls when exceeded
 # Environment variables for Azure
 API_TOKEN = os.getenv('API_TOKEN', "5b67e106-173f-4281-a83f-87b2bdc3b1f1")
 API_PASSWORD = os.getenv('API_PASSWORD', "Welcome1")
@@ -30,7 +33,13 @@ SQL_DATABASE = os.getenv('SQL_DATABASE', "TECHSYS")
 SQL_USERNAME = os.getenv('SQL_USERNAME')
 SQL_PASSWORD = os.getenv('SQL_PASSWORD')
 def get_location_codes() -> pd.DataFrame:
+    cache_key = "locations_data"
     try:
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            logger.info("Using cached location codes")
+            return pd.read_json(StringIO(cached_data))
+    
         conn_str = (
             f"DRIVER={{ODBC Driver 17 for SQL Server}};"
             f"SERVER={SQL_SERVER};"
@@ -46,13 +55,22 @@ def get_location_codes() -> pd.DataFrame:
     
         df_locations['brand'] = 'Five Guys USA'
     
+        cached_json = df_locations[['LOCATION_CODE', 'LOCATION_NAME', 'brand']].to_json()
+        cache.set(cache_key, cached_json, expire=86400)
+    
         logger.info(f"Retrieved {len(df_locations)} locations from SQL")
         return df_locations[['LOCATION_CODE', 'LOCATION_NAME', 'brand']]
     except Exception as e:
         logger.error(f"Error fetching location codes: {e}")
         return pd.DataFrame(columns=['LOCATION_CODE', 'LOCATION_NAME', 'brand'])
 def get_employee_names() -> pd.DataFrame:
+    cache_key = "employee_names"
     try:
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            logger.info("Using cached employee names")
+            return pd.read_json(StringIO(cached_data))
+    
         conn_str = (
             f"DRIVER={{ODBC Driver 17 for SQL Server}};"
             f"SERVER={SQL_SERVER};"
@@ -65,6 +83,9 @@ def get_employee_names() -> pd.DataFrame:
         query = "SELECT EMPLOYEE_NUMBER, FIRST_NAME, LAST_NAME FROM T_EMPLOYEE"
         df_employees = pd.read_sql(query, conn)
         conn.close()
+    
+        cached_json = df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']].to_json()
+        cache.set(cache_key, cached_json, expire=86400)
     
         return df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']]
     except Exception as e:
@@ -85,10 +106,17 @@ def get_date_range() -> tuple[list[str], str, str]:
         dates.append(current.strftime('%d-%b-%y'))
         current += timedelta(days=1)
     return dates, three_suns_ago.strftime('%d-%b-%y'), yesterday.strftime('%d-%b-%y')
-async def fetch_location_data(location_code: str, location_name: str, brand: str, labor_date: str) -> pd.DataFrame:
+async def fetch_location_data(location_code: str, location_name: str, brand: str, labor_date: str, force_refresh: bool = False) -> pd.DataFrame:
+    cache_key = f"timeclock_{location_code}_{labor_date}"
     max_retries = 3
     retry_delay = 1  # initial delay in seconds
     try:
+        if not force_refresh:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                logger.info(f"Using cached data for {location_code} on {labor_date}")
+                return pd.read_json(StringIO(cached_data))
+    
         location_code = location_code.zfill(4)
         url = f"https://webservices.net-chef.com/timeclock/v1/getAllTimeClockEnhanced?laborDate={labor_date}&locationCode={location_code}&includeNull=false"
         headers = {
@@ -125,6 +153,8 @@ async def fetch_location_data(location_code: str, location_name: str, brand: str
                 if all_details:
                     df = pd.concat(all_details, ignore_index=True)
                     df['refresh_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S') # Assume local time; adjust to UTC if needed
+                    cached_json = df.to_json()
+                    cache.set(cache_key, cached_json, expire=86400)
                     return df
                 return pd.DataFrame()
             except aiohttp.ClientError as e:
@@ -138,7 +168,9 @@ async def fetch_location_data(location_code: str, location_name: str, brand: str
     except Exception as e:
         logger.error(f"Unexpected error fetching data for {location_code}: {e}")
         return pd.DataFrame()
-async def fetch_data() -> pd.DataFrame:
+async def fetch_data(force_refresh: bool = False) -> pd.DataFrame:
+    if force_refresh:
+        cache.clear()  # Clears entire cache; for granularity, could track keys but this is simple and effective
     try:
         df_locations = get_location_codes()
         if df_locations.empty:
@@ -160,7 +192,7 @@ async def fetch_data() -> pd.DataFrame:
         dates = get_date_range()[0]
     
         tasks = [
-            fetch_location_data(str(row['LOCATION_CODE']), row['LOCATION_NAME'], row['brand'], d)
+            fetch_location_data(str(row['LOCATION_CODE']), row['LOCATION_NAME'], row['brand'], d, force_refresh)
             for _, row in df_locations.iterrows() for d in dates
         ]
         all_data = [df for df in await asyncio.gather(*tasks) if not df.empty]
@@ -422,7 +454,7 @@ def update_dashboard(n_clicks, selected_location, search_value, n_intervals, exp
     location_options = [{'label': row['LOCATION_NAME'], 'value': row['LOCATION_NAME']} for _, row in df_locations.sort_values('LOCATION_NAME').iterrows()] if not df_locations.empty else [{'label': 'Unknown', 'value': 'Unknown'}]
     
     if triggered_id in ['refresh-button', 'refresh-interval'] and (n_clicks > 0 or n_intervals > 0):
-        df = asyncio.run(fetch_data())
+        df = asyncio.run(fetch_data(force_refresh=True))
         # Compute new table data, alerts, etc.
         filtered_df = df.copy() # Start with explicit copy to avoid warnings
         if selected_location:
