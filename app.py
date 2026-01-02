@@ -195,11 +195,22 @@ async def fetch_data(force_refresh: bool = False) -> pd.DataFrame:
         df_employees = get_employee_names()
         dates = get_date_range()[0]
     
+        sem = asyncio.Semaphore(10)  # Limit concurrent API calls to 10 to avoid rate limiting
+        async def sem_fetch(loc_code, loc_name, brand, date, force):
+            async with sem:
+                return await fetch_location_data(loc_code, loc_name, brand, date, force)
+    
         tasks = [
-            fetch_location_data(str(row['LOCATION_CODE']), row['LOCATION_NAME'], row['brand'], d, force_refresh)
+            sem_fetch(str(row['LOCATION_CODE']), row['LOCATION_NAME'], row['brand'], d, force_refresh)
             for _, row in df_locations.iterrows() for d in dates
         ]
-        all_data = [df for df in await asyncio.gather(*tasks) if not df.empty]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        all_data = []
+        for res in results:
+            if isinstance(res, Exception):
+                logger.error(f"Exception in fetch: {res}")
+            elif not res.empty:
+                all_data.append(res)
     
         if not all_data:
             logger.warning("No data from any API calls - using fallback")
