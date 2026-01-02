@@ -56,7 +56,7 @@ def get_location_codes() -> pd.DataFrame:
         df_locations['brand'] = 'Five Guys USA'
     
         cached_json = df_locations[['LOCATION_CODE', 'LOCATION_NAME', 'brand']].to_json()
-        cache.set(cache_key, cached_json, expire=86400)
+        cache.set(cache_key, cached_json, expire=None)  # Permanent cache since locations don't change
     
         logger.info(f"Retrieved {len(df_locations)} locations from SQL")
         return df_locations[['LOCATION_CODE', 'LOCATION_NAME', 'brand']]
@@ -85,7 +85,7 @@ def get_employee_names() -> pd.DataFrame:
         conn.close()
     
         cached_json = df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']].to_json()
-        cache.set(cache_key, cached_json, expire=86400)
+        cache.set(cache_key, cached_json, expire=None)  # Permanent cache assuming names change rarely
     
         return df_employees[['EMPLOYEE_NUMBER', 'FIRST_NAME', 'LAST_NAME']]
     except Exception as e:
@@ -154,7 +154,7 @@ async def fetch_location_data(location_code: str, location_name: str, brand: str
                     df = pd.concat(all_details, ignore_index=True)
                     df['refresh_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S') # Assume local time; adjust to UTC if needed
                     cached_json = df.to_json()
-                    cache.set(cache_key, cached_json, expire=86400)
+                    cache.set(cache_key, cached_json, expire=3600)  # 1 hour expiration for freshness
                     return df
                 return pd.DataFrame()
             except aiohttp.ClientError as e:
@@ -170,7 +170,11 @@ async def fetch_location_data(location_code: str, location_name: str, brand: str
         return pd.DataFrame()
 async def fetch_data(force_refresh: bool = False) -> pd.DataFrame:
     if force_refresh:
-        cache.clear()  # Clears entire cache; for granularity, could track keys but this is simple and effective
+        # Granular clear: Only delete timeclock keys to preserve permanent caches
+        keys_to_delete = [key for key in cache if key.startswith("timeclock_")]
+        for key in keys_to_delete:
+            cache.delete(key)
+        logger.info(f"Cleared {len(keys_to_delete)} timeclock cache entries")
     try:
         df_locations = get_location_codes()
         if df_locations.empty:
